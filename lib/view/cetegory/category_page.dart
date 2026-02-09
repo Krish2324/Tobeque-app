@@ -1,0 +1,1415 @@
+// lib/view/category/category_page.dart
+import 'package:tobeque/componant/shimmer_componant.dart';
+import 'package:tobeque/utills/html_decode.dart';
+import 'package:tobeque/view/prodduct_details/product_detail_binding.dart';
+import 'package:tobeque/view/prodduct_details/product_details_page.dart';
+import 'package:tobeque/view/wishlist/wish_button.dart';
+import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+import 'package:intl/intl.dart';
+import '../home/home_repository.dart';
+
+enum SortMode { popular, priceLowHigh, priceHighLow }
+enum GridMode { full, two, three } // NEW
+
+class CategoryPage extends StatefulWidget {
+  const CategoryPage({super.key, required this.categoryId, required this.title});
+  final int categoryId;
+  final String title;
+
+  @override
+  State<CategoryPage> createState() => _CategoryPageState();
+}
+
+class _CategoryPageState extends State<CategoryPage> {
+final repo = HomeRepository();
+
+  bool loading = true;
+  String? error;
+  // current category being shown
+  late int _currentCatId;
+  late String _currentTitle;
+  List<Map<String, dynamic>> _all = [];
+  List<Map<String, dynamic>> products = [];
+
+  SortMode sort = SortMode.popular;
+  GridMode grid = GridMode.two;
+  int activeFilters = 0;
+
+  final _sc = ScrollController();
+
+  // NEW ▼ facets (available options) + selections
+  final Set<String> _facetColors = <String>{};
+  final Set<String> _facetSizes  = <String>{};
+  final Set<String> _selColors   = <String>{};
+  final Set<String> _selSizes    = <String>{};
+  bool _onlyDiscount = false;
+
+  // NEW ▼ subcategories (optional)
+  List<Map<String, dynamic>> _subcats = const [];
+
+
+
+ 
+
+  @override
+  void initState() {
+    super.initState();
+        // ✅ initialize first
+    _currentCatId = widget.categoryId;
+    _currentTitle = widget.title;
+    _load();
+  }
+
+  Future<void> _load([int? catId]) async {
+    setState(() { loading = true; error = null; });
+    final id = catId ?? _currentCatId;
+    try {
+      final res = await repo.fetchProductsByCategory(categoryId: id);
+      _all = List<Map<String, dynamic>>.from(res);
+      products = List<Map<String, dynamic>>.from(_all);
+      _collectFacets();
+      _fetchSubcategories();          // uses _currentCatId internally
+      _applySort();
+    } catch (e) {
+      error = e.toString();
+    }
+    if (mounted) setState(() => loading = false);
+  }
+  // ---------- FACETS ----------
+void _collectFacets() {
+  _facetColors.clear();
+  _facetSizes.clear();
+
+  for (final p in _all) {
+    final attrs = (p['attributes'] as List?) ?? const [];
+    for (final a in attrs.whereType<Map>()) {
+      final key = ((a['taxonomy'] ?? a['name'])?.toString() ?? '').toLowerCase();
+      final values = _termSet(a['terms'] ?? a['options'] ?? a['options_json']);
+
+      if (key.contains('color') || key == 'pa_color') {
+        _facetColors.addAll(values);
+      }
+      if (key.contains('size') || key == 'pa_size') {
+        _facetSizes.addAll(values);
+      }
+    }
+  }
+}
+
+
+bool _productHasAnyColor(Map p, Set<String> want) {
+  if (want.isEmpty) return true;
+  final attrs = (p['attributes'] as List?) ?? const [];
+  for (final a in attrs.whereType<Map>()) {
+    final key = ((a['taxonomy'] ?? a['name'])?.toString() ?? '').toLowerCase();
+    if (key.contains('color') || key == 'pa_color') {
+      final opts = _termSet(a['terms'] ?? a['options'] ?? a['options_json']);
+      if (opts.intersection(want.map((e) => e.toLowerCase()).toSet()).isNotEmpty) return true;
+    }
+  }
+  return false;
+}
+
+bool _productHasAnySize(Map p, Set<String> want) {
+  if (want.isEmpty) return true;
+  final attrs = (p['attributes'] as List?) ?? const [];
+  for (final a in attrs.whereType<Map>()) {
+    final key = ((a['taxonomy'] ?? a['name'])?.toString() ?? '').toLowerCase();
+    if (key.contains('size') || key == 'pa_size') {
+      final opts = _termSet(a['terms'] ?? a['options'] ?? a['options_json']);
+      if (opts.intersection(want.map((e) => e.toLowerCase()).toSet()).isNotEmpty) return true;
+    }
+  }
+  return false;
+}
+
+
+  bool _productDiscounted(Map p) {
+    // Woo Store API often exposes: prices.sale_price, prices.regular_price, is_on_sale
+    final prices = p['prices'];
+    if (prices is Map) {
+      final onSale = prices['on_sale'] == true || prices['is_on_sale'] == true;
+      if (onSale) return true;
+      final sale = double.tryParse('${prices['sale_price'] ?? ''}') ?? 0;
+      final reg  = double.tryParse('${prices['regular_price'] ?? ''}') ?? 0;
+      if (sale > 0 && reg > 0 && sale < reg) return true;
+    }
+    // Fallback: price_html contains <del>
+    final html = (p['price_html'] ?? p['priceHtml'])?.toString() ?? '';
+    return html.contains('<del');
+  }
+
+  void _applyFilters() {
+    List<Map<String, dynamic>> list = _all.where((p) {
+      if (!_productHasAnyColor(p, _selColors)) return false;
+      if (!_productHasAnySize(p, _selSizes)) return false;
+      if (_onlyDiscount && !_productDiscounted(p)) return false;
+      return true;
+    }).toList();
+
+    // badge count
+    activeFilters = (_selColors.isNotEmpty ? 1 : 0) +
+                    (_selSizes.isNotEmpty ? 1 : 0) +
+                    (_onlyDiscount ? 1 : 0);
+
+    products = list;
+    _applySort();
+    setState(() {});
+  }
+
+
+  // ---------- SUBCATEGORIES ----------
+Future<void> _fetchSubcategories() async {
+  try {
+    _subcats = await repo.fetchSubcategories(parentId: _currentCatId);
+  } catch (_) {
+    _subcats = const [];
+  }
+  if (mounted) setState(() {});
+}
+
+  // ---------- PRICE TEXT (used already) ----------
+  String _priceTextFrom(Map p) {
+    final m = (p['prices'] as Map?) ?? {};
+    final raw = m['price']?.toString();
+    if (raw != null && raw.isNotEmpty) {
+      final minor = (m['currency_minor_unit'] as int?) ?? 2;
+      final sym   = (m['currency_symbol']?.toString() ?? '₹');
+      final value = (double.tryParse(raw) ?? 0) / (pow10(minor));
+      final fmt   = NumberFormat.decimalPattern();
+      return '$sym${fmt.format(value)}';
+    }
+    // fallback decode from price_html
+    final html = (p['price_html'] ?? p['priceHtml'])?.toString() ?? '';
+    var s = html.replaceAll(RegExp(r'<[^>]*>'), '').replaceAll('&nbsp;', ' ');
+    s = s.replaceAllMapped(RegExp(r'&#(\d+);'), (m) => String.fromCharCode(int.parse(m[1]!)));
+    s = s.replaceFirstMapped(RegExp(r'^([^\d\s]+)(\d)'), (m) => '${m[1]} ${m[2]}');
+    return s.trim();
+  }
+
+  int pow10(int n) => List.filled(n, 0).fold(1, (a, _) => a * 10);
+
+  // ---------- UI helpers ----------
+  Color _colorFromName(String name) {
+    switch (name.toLowerCase()) {
+      case 'white': return const Color(0xfff5f5f5);
+      case 'black': return Colors.black;
+      case 'grey':  return Colors.grey;
+      case 'blue':  return Colors.blue;
+      case 'green': return Colors.green;
+      case 'brown': return const Color(0xff8B5A2B);
+      case 'red':   return Colors.red;
+      case 'yellow':return Colors.amber;
+      default:      return const Color(0xffd8d8d8);
+    }
+  }
+// --- helpers to read attribute values safely ---
+String _termLabel(dynamic o) {
+  if (o is Map) return (o['name'] ?? o['value'] ?? o['slug'] ?? '').toString();
+  return o?.toString() ?? '';
+}
+Set<String> _termSet(dynamic listLike) {
+  final out = <String>{};
+  if (listLike is List) {
+    for (final o in listLike) {
+      final s = _termLabel(o).trim();
+      if (s.isNotEmpty) out.add(s.toLowerCase());
+    }
+  } else if (listLike is String && listLike.isNotEmpty) {
+    out.addAll(listLike.split(',').map((e) => e.trim().toLowerCase()));
+  }
+  return out;
+}
+
+
+  /* -------------------------------- SORT -------------------------------- */
+  Future<void> _openFilterSheet() async {
+    final tempColors = Set<String>.from(_selColors);
+    final tempSizes  = Set<String>.from(_selSizes);
+    bool tempDiscount = _onlyDiscount;
+    SortMode tempSort = sort;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setM) {
+          final resCount = _all.where((p) {
+            if (tempColors.isNotEmpty && !_productHasAnyColor(p, tempColors)) return false;
+            if (tempSizes.isNotEmpty  && !_productHasAnySize(p, tempSizes))   return false;
+            if (tempDiscount && !_productDiscounted(p)) return false;
+            return true;
+          }).length;
+print(_all);
+          Widget groupTitle(String s) => Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 10),
+            child: Text(s, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+          );
+
+          return SafeArea(
+            child: SizedBox(
+              height: MediaQuery.of(ctx).size.height * 0.86,
+              child: Column(
+                children: [
+                  // header
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
+                    child: Row(
+                      children: [
+                        const SizedBox(width: 40),
+                        const Expanded(
+                          child: Text('Filter', textAlign: TextAlign.center,
+                            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                        ),
+                        TextButton(
+                          onPressed: () {
+                            setM(() {
+                              tempColors.clear();
+                              tempSizes.clear();
+                              tempDiscount = false;
+                              tempSort = SortMode.popular;
+                            });
+                          },
+                          child: const Text('Clear'),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Divider(height: 1),
+
+                  Expanded(
+                    child: ListView(
+                      padding: EdgeInsets.zero,
+                      children: [
+                        // Sort by
+                        groupTitle('Sort by'),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: Wrap(
+                            spacing: 10, runSpacing: 10,
+                            children: [
+                              for (final s in SortMode.values)
+                                ChoiceChip(
+                                  label: Text(
+                                    s == SortMode.popular ? 'New In'
+                                      : s == SortMode.priceLowHigh ? 'Price low to high'
+                                      : 'Price high to low',
+                                  ),
+                                  selected: tempSort == s,
+                                  onSelected: (_) => setM(() => tempSort = s),
+                                  selectedColor: Colors.black,
+                                  labelStyle: TextStyle(
+                                    color: tempSort == s ? Colors.white : Colors.black,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  shape: StadiumBorder(
+                                    side: BorderSide(color: Colors.black.withOpacity(.12)),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+
+                        // Colour
+                        if (_facetColors.isNotEmpty) ...[
+                          const Divider(height: 24),
+                          groupTitle('Colour'),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: Wrap(
+                              spacing: 14, runSpacing: 10,
+                              children: _facetColors.map((c) {
+                                final sel = tempColors.contains(c);
+                                return Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    GestureDetector(
+                                      onTap: () => setM(() {
+                                        if (sel) tempColors.remove(c); else tempColors.add(c);
+                                      }),
+                                      child: Container(
+                                        width: 35, height: 35,
+                                        decoration: BoxDecoration(
+                                          color: _colorFromName(c),
+                                          border: Border.all(
+                                            color: sel ? Colors.black : Colors.black26, width: sel ? 2 : 1),
+                                          borderRadius: BorderRadius.circular(0),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    SizedBox(
+                                      width: 60,
+                                      child: Text(c[0].toUpperCase() + c.substring(1),
+                                        maxLines: 1, overflow: TextOverflow.ellipsis,
+                                        textAlign: TextAlign.center,
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              }).toList(),
+                            ),
+                          ),
+                        ],
+
+                        // Size
+                        if (_facetSizes.isNotEmpty) ...[
+                          const Divider(height: 24),
+                          groupTitle('Size'),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: Wrap(
+                              spacing: 10, runSpacing: 10,
+                              children: _facetSizes.map((s) {
+                                final sel = tempSizes.contains(s);
+                                return ChoiceChip(
+                                  label: Text(s.toUpperCase()),
+                                  selected: sel,
+                                  onSelected: (_) => setM(() {
+                                    if (sel) tempSizes.remove(s); else tempSizes.add(s);
+                                  }),
+                                  selectedColor: Colors.black,
+                                  labelStyle: TextStyle(
+                                    color: sel ? Colors.white : Colors.black,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                  shape: StadiumBorder(
+                                    side: BorderSide(color: Colors.black.withOpacity(.12)),
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                          ),
+                        ],
+
+                        // Discount
+                        const Divider(height: 24),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: CheckboxListTile(
+                            contentPadding: EdgeInsets.zero,
+                            value: tempDiscount,
+                            onChanged: (v) => setM(() => tempDiscount = v ?? false),
+                            title: const Text('With discount',
+                                style: TextStyle(fontWeight: FontWeight.w700)),
+                            controlAffinity: ListTileControlAffinity.trailing,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+                    ),
+                  ),
+
+                  // Footer button
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          // apply
+                          sort = tempSort;
+                          _selColors
+                            ..clear()
+                            ..addAll(tempColors);
+                          _selSizes
+                            ..clear()
+                            ..addAll(tempSizes);
+                          _onlyDiscount = tempDiscount;
+                          Navigator.pop(ctx);
+                          _applyFilters();
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.black,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        child: Text('SEE RESULTS ($resCount)',
+                            style: const TextStyle(fontWeight: FontWeight.w800)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  void _applySort() {
+    int safeInt(dynamic v) {
+      if (v == null) return 0;
+      if (v is int) return v;
+      return int.tryParse(v.toString()) ?? 0;
+    }
+
+    double safeDouble(dynamic v) {
+      if (v == null) return 0;
+      if (v is num) return v.toDouble();
+      return double.tryParse(v.toString()) ?? 0;
+    }
+
+    int priceMinor(Map<String, dynamic> p) {
+      final prices = p['prices'];
+      if (prices is Map && prices['price'] != null) {
+        final rawStr = prices['price'].toString();
+        return (double.tryParse(rawStr) ?? 0).round();
+      }
+      return 0;
+    }
+
+    final list = [...products];
+
+    switch (sort) {
+      case SortMode.popular:
+        list.sort((a, b) {
+          final r1 = safeInt(a['review_count']);
+          final r2 = safeInt(b['review_count']);
+          if (r1 != r2) return r2.compareTo(r1);
+          final ar1 = safeDouble(a['average_rating']);
+          final ar2 = safeDouble(b['average_rating']);
+          if (ar1 != ar2) return ar2.compareTo(ar1);
+          return safeInt(b['id']).compareTo(safeInt(a['id']));
+        });
+        break;
+      case SortMode.priceLowHigh:
+        list.sort((a, b) => priceMinor(a).compareTo(priceMinor(b)));
+        break;
+      case SortMode.priceHighLow:
+        list.sort((a, b) => priceMinor(b).compareTo(priceMinor(a)));
+        break;
+    }
+
+    products = list;
+    setState(() {});
+  }
+
+  /* ------------------------------- BUILD -------------------------------- */
+
+  @override
+  Widget build(BuildContext context) {
+    if (loading) {
+      return const Scaffold(
+        backgroundColor: Colors.white,
+        body: _CategorySkeleton(),
+      );
+    }
+    if (error != null) {
+      return Scaffold(
+        body: _ErrorState(message: error!, onRetry: _load),
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: CustomScrollView(
+        controller: _sc,
+        slivers: [
+          // AppBar
+      SliverAppBar(
+        pinned: true,
+        elevation: 0,
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+        centerTitle: false,
+        title: Text(widget.title,
+          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+      ),
+// After SliverAppBar(...)
+SliverToBoxAdapter(
+  child: (_subcats.isEmpty)
+      ? const SizedBox.shrink()
+      : SizedBox(
+          height: 48,
+          child: ListView.separated(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            scrollDirection: Axis.horizontal,
+            itemCount: _subcats.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 8),
+            itemBuilder: (_, i) {
+              final c = _subcats[i];
+              final id = (c['id'] as num).toInt();
+              final name = c['name'].toString();
+              final selected = id == _currentCatId;
+
+              return ActionChip(
+                label: Text(
+                  name,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: selected ? Colors.white : Colors.black,
+                  ),
+                ),
+                onPressed: () async {
+                  if (id == _currentCatId) return; // already selected
+                  setState(() {
+                    _currentCatId = id;
+                    _currentTitle = name;
+                    loading = true;
+                    products = const []; // optional: clear quickly
+                  });
+                  // jump to top so user sees new list from start
+                  _sc.animateTo(0,
+                      duration: const Duration(milliseconds: 250),
+                      curve: Curves.easeOut);
+                  await _load(id); // reload for chosen subcategory
+                },
+                backgroundColor: selected ? Colors.black : Colors.white,
+                shape: StadiumBorder(
+                  side: BorderSide(color: selected ? Colors.black : Colors.black12),
+                ),
+              );
+            },
+          ),
+        ),
+),
+
+
+               // 3) Toolbar (layout + result count + filter + sort)
+      SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12).copyWith(top: 6, bottom: 8),
+          child: Row(
+            children: [
+              GestureDetector(
+                onTap: () => setState(() => grid = GridMode.full),
+                child: _ToolbarIcon(icon: Icons.crop_square, selected: grid == GridMode.full),
+              ),
+              const SizedBox(width: 10),
+              GestureDetector(
+                onTap: () => setState(() => grid = GridMode.two),
+                child: _ToolbarIcon(icon: Icons.table_rows_rounded, selected: grid == GridMode.two),
+              ),
+              const SizedBox(width: 10),
+              GestureDetector(
+                onTap: () => setState(() => grid = GridMode.three),
+                child: _ToolbarIcon(icon: Icons.grid_view, selected: grid == GridMode.three),
+              ),
+              const Spacer(),
+
+              // result count
+              Text('${products.length} results',
+                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
+              const SizedBox(width: 8),
+
+              // filter badge + button
+              if (activeFilters > 0) ...[
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.black, borderRadius: BorderRadius.circular(14)),
+                  child: Text('$activeFilters',
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+                ),
+                const SizedBox(width: 6),
+              ],
+              IconButton(
+                icon: const Icon(Icons.tune_rounded),
+                onPressed: _openFilterSheet,
+                tooltip: 'Filter',
+              ),
+
+              // sort popup
+              
+            ],
+          ),
+        ),
+      ),
+
+          // Content changes by grid mode
+          if (grid == GridMode.full)
+            SliverList(
+              delegate: SliverChildListDelegate(
+                _buildStaggeredBlocks(context),
+              ),
+            )
+          else
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              sliver: SliverGrid(
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: grid == GridMode.two ? 2 : 3,
+                  mainAxisSpacing: 12,
+                  crossAxisSpacing: 12,
+                  childAspectRatio: grid == GridMode.two ? 0.58 : 0.64,
+                ),
+             // inside: SliverPadding -> SliverGrid -> delegate: SliverChildBuilderDelegate(
+delegate: SliverChildBuilderDelegate(
+  (context, i) {
+    final p   = products[i];
+    final id  = p['id'] as int;
+    final name = (p['name'] as String? ?? '').trim();
+    final priceText = _priceTextFrom(p);
+
+    // 👇 use all product images (front/back/extra)
+    final sources = _imagesFromProduct(p);
+
+    final showMeta = grid != GridMode.three;
+
+    // 👇 choose swipe gallery for 2-col, single image for 3-col
+    Widget imageWidget;
+    if (grid == GridMode.two) {
+      imageWidget = SmallTile(
+        p: p,
+      );
+    } else {
+      imageWidget = ClipRRect(
+        borderRadius: BorderRadius.circular(2),
+        child: _ResilientImage(sources: sources, fit: BoxFit.cover),
+      );
+    }
+
+    return InkWell(
+      onTap: () => Get.to(
+        () => ProductDetailPage(key: ValueKey(id), productId: id),
+        binding: ProductDetailBinding(id),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AspectRatio(
+            aspectRatio: grid == GridMode.two ? 2 / 3.4 : 1 / 1.5,
+            child: imageWidget,
+          ),
+          if (showMeta) ...[
+           // const SizedBox(height: 6),
+            // Text(
+            //   name,
+            //   maxLines: 2,
+            //   overflow: TextOverflow.ellipsis,
+            //   style: const TextStyle(
+            //     fontWeight: FontWeight.w700,
+            //     height: 1.1,
+            //     letterSpacing: .3,
+            //     fontSize: 12,
+            //   ),
+            // ),
+            // const SizedBox(height: 4),
+            // Text(priceText,
+            //     style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12)),
+          ],
+        ],
+      ),
+    );
+  },
+  childCount: products.length,
+),
+
+
+              ),
+            ),
+
+          const SliverToBoxAdapter(child: SizedBox(height: 110)),
+        ],
+      ),
+
+      bottomNavigationBar: _PromoBar(
+        text: 'COMBO WINS UP TO 10% OFF',
+        action: 'Shop now',
+        onTap: () {},
+      ),
+    );
+  }
+
+  /* ------------------------ FULL (Big + 2-up) feed ------------------------ */
+
+  List<Widget> _buildStaggeredBlocks(BuildContext context) {
+    final out = <Widget>[];
+    int i = 0;
+    while (i < products.length) {
+      // Big
+      final p0 = products[i++];
+      out.add(_BigTile(
+        p: p0,
+        onTap: () {
+          final id = p0['id'] as int;
+          Get.to(() => ProductDetailPage(key: ValueKey(id), productId: id),
+              binding: ProductDetailBinding(id));
+        },
+      ));
+      out.add(const SizedBox(height: 16));
+
+      // Two-up row
+      if (i < products.length) {
+        final p1 = products[i++];
+        Map<String, dynamic>? p2;
+        if (i < products.length) p2 = products[i++];
+        out.add(Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Row(
+            children: [
+              Expanded(
+                child: SmallTile(
+                  p: p1,
+                  onTap: () {
+                    final id = p1['id'] as int;
+                    Get.to(() => ProductDetailPage(key: ValueKey(id), productId: id),
+                        binding: ProductDetailBinding(id));
+                  },
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: (p2 == null)
+                    ? const SizedBox.shrink()
+                    : SmallTile(
+                        p: p2!,
+                        onTap: () {
+                          final id = p2!['id'] as int;
+                          Get.to(() => ProductDetailPage(key: ValueKey(id), productId: id),
+                              binding: ProductDetailBinding(id));
+                        },
+                      ),
+              ),
+            ],
+          ),
+        ));
+        out.add(const SizedBox(height: 28));
+      }
+    }
+    return out;
+  }
+}
+class SwipeGallery extends StatefulWidget {
+  const SwipeGallery({
+    required this.sources,
+    this.fit = BoxFit.cover,
+    this.borderRadius = 2,
+  });
+
+  final List<String> sources;
+  final BoxFit fit;
+  final double borderRadius;
+
+  @override
+  State<SwipeGallery> createState() => SwipeGalleryState();
+}
+
+class SwipeGalleryState extends State<SwipeGallery> {
+  late final PageController _pc;
+  int _index = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _pc = PageController();
+    // pre-cache the next image
+    WidgetsBinding.instance.addPostFrameCallback((_) => _precacheNext(0));
+  }
+
+  @override
+  void dispose() {
+    _pc.dispose();
+    super.dispose();
+  }
+
+  void _precacheNext(int i) {
+    if (!mounted) return;
+    final next = i + 1;
+    if (next < widget.sources.length) {
+      precacheImage(NetworkImage(widget.sources[next]), context);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final urls = widget.sources;
+    if (urls.length <= 1) {
+      // Single image: just show it
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(widget.borderRadius),
+        child: _ResilientImage(sources: urls, fit: widget.fit),
+      );
+    }
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(widget.borderRadius),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          
+          PageView.builder(
+            controller: _pc,
+            physics: const BouncingScrollPhysics(),
+            itemCount: urls.length,
+            onPageChanged: (i) {
+              setState(() => _index = i);
+              _precacheNext(i);
+            },
+            itemBuilder: (_, i) =>
+                _ResilientImage(sources: [urls[i]], fit: widget.fit),
+          ),
+          // tiny dot indicator (bottom-center)
+          Positioned(
+            bottom: 8,
+            left: 0,
+            right: 0,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(urls.length, (i) {
+              
+                return Container(
+                  width: 6,
+                  height: 6,
+                  margin: const EdgeInsets.symmetric(horizontal: 3),
+                
+                );
+              }),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/* =============================== Tiles =============================== */
+List<String> _imagesFromProduct(Map<String, dynamic> p) {
+  final imgs = (p['images'] as List? ?? []);
+  final urls = <String>[];
+  for (final m in imgs.whereType<Map>()) {
+    final u = _sanitizeUrl(m['src']?.toString());
+    if (u != null && u.isNotEmpty) urls.add(u);
+  }
+
+  // Fallbacks if the product has 0 images
+  if (urls.isEmpty) {
+    final name = (p['name'] as String? ?? 'item');
+    urls.addAll(_imageCandidates(primary: '', seed: name));
+  }
+  return urls;
+}
+class _BigTile extends StatelessWidget {
+  const _BigTile({required this.p, this.onTap});
+  final Map<String, dynamic> p;
+  final VoidCallback? onTap;
+
+
+  @override
+  Widget build(BuildContext context) {
+    final name = (p['name'] as String? ?? '').trim();
+    final imgs = (p['images'] as List? ?? []);
+    final img = imgs.isNotEmpty ? (imgs.first['src']?.toString() ?? '') : '';
+    final priceText = _priceTextFrom(p);
+ final sources = _imagesFromProduct(p);
+
+    return Stack(
+      children: [
+            Positioned(
+
+  right: 8,
+  bottom: -3,
+  child: Material(
+    color: Colors.white.withOpacity(0.30),
+    shape: const CircleBorder(),
+    child: Padding(
+      padding: const EdgeInsets.all(2),
+      // We’re on PDP, so we have the product map `p`
+      child: WishButton(
+        id: (p['id'] as num).toInt(),
+        name: (p['name'] ?? '').toString(),
+        // priceHtml is optional here; pass null or a formatted string if you want
+        image: (p['images'] is List && (p['images'] as List).isNotEmpty)
+            ? (((p['images'] as List).first as Map)['src']?.toString())
+            : null,
+        size: 22,
+        activeColor: Colors.redAccent,
+        inactiveColor: Colors.black54,
+      ),
+    ),
+  ),
+),
+
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+           AspectRatio(
+          aspectRatio: 2.6 / 4,
+          child: InkWell(
+        onTap: onTap,
+        child: SwipeGallery(
+          sources: sources,
+          fit: BoxFit.cover,
+          borderRadius: 0,
+        ),
+          ),
+        ),
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(name,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: .3,
+                                fontSize: 14)),
+                     
+                        Text(priceText,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: .3,
+                                fontSize: 14)),
+                      ],
+                    ),
+                  ),
+                 
+                ],
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+
+
+
+class SmallTile extends StatelessWidget {
+  const SmallTile({required this.p, this.onTap});
+  final Map<String, dynamic> p;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final name = (HtmlDecode.text(p['name'] )as String? ?? '').trim();
+    final priceText = _priceTextFrom(p);
+    final sources = _imagesFromProduct(p);
+    final firstImg = (p['images'] is List && (p['images'] as List).isNotEmpty)
+        ? (((p['images'] as List).first as Map)['src']?.toString())
+        : null;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Image area with overlayed heart
+        AspectRatio(
+          aspectRatio: 2 / 2.88,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              // swipeable gallery
+              InkWell(
+                onTap: onTap,
+                child: SwipeGallery(
+                  sources: sources,
+                  fit: BoxFit.cover,
+                  borderRadius: 2,
+                ),
+              ),
+    
+              // ❤️ heart overlay (bottom-right)
+              
+            ],
+          ),
+        ),
+    
+       // const SizedBox(height: 6),
+    
+        // Title (flexible, ellipsis)
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              mainAxisAlignment: MainAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: MediaQuery.of(context).size.width/3.2,
+                  child: Text(
+                    name,
+                    maxLines: 1,                    // set to 1 for tighter three-column mode
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      height: 1.1,
+                      letterSpacing: .3,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+                   const SizedBox(height: 2),
+        
+        // Price
+        Text(
+          priceText,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            fontWeight: FontWeight.w900,
+            height: 1.2,
+            letterSpacing: .3,
+            fontSize: 12,
+          ),
+        ),
+              ],
+            ),
+        WishButton(
+          id: (p['id'] as num).toInt(),
+          name: name,
+          image: firstImg,
+          size: 20,
+          activeColor: Colors.redAccent,
+          inactiveColor: Colors.black54,
+        ),  ],
+        ),
+    
+     
+      ],
+    );
+  }
+}
+
+
+/* ----------------------------- Toolbar icon ----------------------------- */
+
+class _ToolbarIcon extends StatelessWidget {
+  const _ToolbarIcon({required this.icon, this.selected = false});
+  final IconData icon;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = selected ? Colors.black : const Color(0xFF9E9E9E);
+    return Container(
+      width: 36,
+      height: 36,
+      decoration: BoxDecoration(
+        border: Border.all(color: const Color(0xFFEAEAEA)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Icon(icon, size: 18, color: c),
+    );
+  }
+}
+
+/* ----------------------------- Promo bar ----------------------------- */
+
+class _PromoBar extends StatelessWidget {
+  const _PromoBar({required this.text, required this.action, this.onTap});
+  final String text;
+  final String action;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Material(
+        color: Colors.black,
+        child: InkWell(
+          onTap: onTap,
+          child: SizedBox(
+            height: 48,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(text,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: .4)),
+                const SizedBox(width: 10),
+                Text(action,
+                    style: const TextStyle(
+                        color: Colors.white70, fontWeight: FontWeight.w700)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/* -------------------------- Resilient image -------------------------- */
+
+class _ResilientImage extends StatefulWidget {
+  const _ResilientImage({required this.sources, this.fit = BoxFit.cover});
+  final List<String> sources;
+  final BoxFit fit;
+
+  @override
+  State<_ResilientImage> createState() => _ResilientImageState();
+}
+
+class _ResilientImageState extends State<_ResilientImage> {
+  int _idx = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.sources.isEmpty) {
+      return const ColoredBox(color: Color(0xfff2f2f2));
+    }
+    final url = widget.sources[_idx];
+    return Image.network(
+      url,
+      fit: widget.fit,
+      loadingBuilder: (ctx, child, evt) {
+        if (evt == null) return child;
+        return const ShimmerWave(
+          period: Duration(milliseconds: 2200),
+          direction: ShineDirection.diagonal,
+          tiltDegrees: 20,
+          child: ColoredBox(color: Color(0xFFEDEDED)),
+        );
+      },
+      errorBuilder: (_, __, ___) {
+        if (_idx < widget.sources.length - 1) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) setState(() => _idx++);
+          });
+        }
+        return const ColoredBox(color: Color(0xfff2f2f2));
+      },
+    );
+  }
+}
+
+/* ----------------------------- Error box ----------------------------- */
+
+class _ErrorState extends StatelessWidget {
+  const _ErrorState({required this.message, required this.onRetry});
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.wifi_off, size: 40, color: Colors.grey),
+            const SizedBox(height: 12),
+            Text('Something went wrong',
+                style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 6),
+            Text(message,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.grey)),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Retry'),
+            )
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/* --------------------- formatting + images helpers --------------------- */
+
+String _priceTextFrom(Map<String, dynamic> p) {
+  final prices = p['prices'];
+  if (prices is Map && prices['price'] != null) {
+    final rawStr = prices['price'].toString(); // minor units
+    final currency = prices['currency_symbol']?.toString() ?? '₹';
+    final minor = double.tryParse(rawStr) ?? 0;
+    final major = minor / 100.0;
+    return '$currency${NumberFormat.decimalPattern().format(major)}';
+  }
+  final html = (p['price_html'] as String? ?? '')
+      .replaceAll(RegExp(r'<[^>]*>'), '')
+      .replaceAll('&nbsp;', ' ')
+      .trim();
+  return html.isEmpty ? '' : html;
+}
+
+String? _sanitizeUrl(String? u) {
+  if (u == null || u.isEmpty) return null;
+  var x = u.trim().replaceAll(' ', '%20');
+  if (x.startsWith('http://')) x = x.replaceFirst('http://', 'https://');
+  return x;
+}
+
+String _stableUnsplash(String seed) {
+  final s = seed.toLowerCase();
+  const map = {
+    'dresses':
+        'https://images.unsplash.com/photo-1520975916090-3105956dac38?w=1000&auto=format&fit=crop',
+    'fashion':
+        'https://images.unsplash.com/photo-1520975739545-0f2d321e3cde?w=1000&auto=format&fit=crop',
+    'bottom':
+        'https://images.unsplash.com/photo-1513364776144-60967b0f800f?w=1000&auto=format&fit=crop',
+    'sets':
+        'https://images.unsplash.com/photo-1503341455253-b2e723bb3dbb?w=1000&auto=format&fit=crop',
+    'top':
+        'https://images.unsplash.com/photo-1457972729786-0411a3b2b626?w=1000&auto=format&fit=crop',
+  };
+  return map[s] ??
+      'https://images.unsplash.com/photo-1512436991641-6745cdb1723f?w=1000&auto=format&fit=crop';
+}
+
+String _picsumSeed(String seed, {int w = 1000, int h = 1500}) =>
+    'https://picsum.photos/seed/${Uri.encodeComponent(seed)}/$w/$h';
+
+List<String> _imageCandidates({required String primary, required String seed}) {
+  final list = <String>[];
+  final p = _sanitizeUrl(primary);
+  if (p != null) list.add(p);
+  list.add(_stableUnsplash(seed));
+  list.add(_picsumSeed(seed));
+  return list;
+}
+
+/* -------------------------- Page Skeleton (shimmer) -------------------------- */
+
+class _CategorySkeleton extends StatelessWidget {
+  const _CategorySkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomScrollView(
+      slivers: [
+        SliverAppBar(
+          pinned: true,
+          elevation: 0,
+          backgroundColor: Colors.white,
+          foregroundColor: Colors.black,
+          centerTitle: false,
+          title: ShimmerWave.box(
+              width: 120, height: 20, radius: BorderRadius.circular(4)),
+        ),
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
+            child: Row(
+              children: [
+                _iconSkeleton(),
+                const SizedBox(width: 8),
+                _iconSkeleton(),
+                const SizedBox(width: 8),
+                _iconSkeleton(),
+                const Spacer(),
+                ShimmerWave.box(
+                    width: 100, height: 16, radius: BorderRadius.circular(4)),
+                const SizedBox(width: 8),
+                _iconSkeleton(),
+              ],
+            ),
+          ),
+        ),
+        const SliverToBoxAdapter(child: _BigCardSkeleton()),
+        SliverPadding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          sliver: SliverGrid(
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              mainAxisSpacing: 12,
+              crossAxisSpacing: 12,
+              childAspectRatio: .53,
+            ),
+            delegate: SliverChildBuilderDelegate(
+              (_, __) => const _ProductCardSkeleton(),
+              childCount: 2,
+            ),
+          ),
+        ),
+        const SliverToBoxAdapter(child: _BigCardSkeleton()),
+        const SliverToBoxAdapter(child: SizedBox(height: 120)),
+      ],
+    );
+  }
+
+  Widget _iconSkeleton() =>
+      Padding(padding: const EdgeInsets.all(2), child: ShimmerWave.circle(size: 32));
+}
+
+class _BigCardSkeleton extends StatelessWidget {
+  const _BigCardSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AspectRatio(
+            aspectRatio: 4 / 5,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(2),
+              child: const ShimmerWave(
+                period: Duration(milliseconds: 1800),
+                direction: ShineDirection.diagonal,
+                tiltDegrees: 20,
+                child: ColoredBox(color: Color(0xFFEDEDED)),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          ShimmerWave.box(
+              width: 160, height: 16, radius: BorderRadius.circular(4)),
+          const SizedBox(height: 6),
+          ShimmerWave.box(
+              width: 90, height: 16, radius: BorderRadius.circular(4)),
+          const SizedBox(height: 10),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProductCardSkeleton extends StatelessWidget {
+  const _ProductCardSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(2),
+            child: const ShimmerWave(
+              period: Duration(milliseconds: 1800),
+              direction: ShineDirection.diagonal,
+              tiltDegrees: 20,
+              child: ColoredBox(color: Color(0xFFEDEDED)),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        ShimmerWave.box(
+            width: double.infinity,
+            height: 14,
+            radius: BorderRadius.circular(4)),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            Expanded(
+              child: ShimmerWave.box(
+                  width: 110, height: 14, radius: BorderRadius.circular(4)),
+            ),
+            const SizedBox(width: 8),
+            ShimmerWave.circle(size: 28),
+          ],
+        ),
+      ],
+    );
+  }
+}
