@@ -14,7 +14,7 @@ enum GridMode { full, two, three } // NEW
 
 class CategoryPage extends StatefulWidget {
   const CategoryPage({super.key, required this.categoryId, required this.title});
-  final int categoryId;
+  final String categoryId; // Real MongoDB _id string
   final String title;
 
   @override
@@ -27,7 +27,7 @@ final repo = HomeRepository();
   bool loading = true;
   String? error;
   // current category being shown
-  late int _currentCatId;
+  late String _currentCatId; // MongoDB _id string
   late String _currentTitle;
   List<Map<String, dynamic>> _all = [];
   List<Map<String, dynamic>> products = [];
@@ -61,7 +61,7 @@ final repo = HomeRepository();
     _load();
   }
 
-  Future<void> _load([int? catId]) async {
+  Future<void> _load([String? catId]) async {
     setState(() { loading = true; error = null; });
     final id = catId ?? _currentCatId;
     try {
@@ -538,7 +538,7 @@ SliverToBoxAdapter(
             separatorBuilder: (_, __) => const SizedBox(width: 8),
             itemBuilder: (_, i) {
               final c = _subcats[i];
-              final id = (c['id'] as num).toInt();
+              final id = (c['_id'] ?? c['id'] ?? '').toString();
               final name = c['name'].toString();
               final selected = id == _currentCatId;
 
@@ -553,7 +553,7 @@ SliverToBoxAdapter(
                 onPressed: () async {
                   if (id == _currentCatId) return; // already selected
                   setState(() {
-                    _currentCatId = id;
+                    _currentCatId = id; // String MongoDB _id
                     _currentTitle = name;
                     loading = true;
                     products = const []; // optional: clear quickly
@@ -647,7 +647,7 @@ SliverToBoxAdapter(
 delegate: SliverChildBuilderDelegate(
   (context, i) {
     final p   = products[i];
-    final id  = p['id'] as int;
+    final id  = (p['_id'] ?? p['id'] ?? '').toString();
     final name = (p['name'] as String? ?? '').trim();
     final priceText = _priceTextFrom(p);
 
@@ -732,7 +732,7 @@ delegate: SliverChildBuilderDelegate(
       out.add(_BigTile(
         p: p0,
         onTap: () {
-          final id = p0['id'] as int;
+          final id = (p0['_id'] ?? p0['id'] ?? '').toString();
           Get.to(() => ProductDetailPage(key: ValueKey(id), productId: id),
               binding: ProductDetailBinding(id));
         },
@@ -752,7 +752,7 @@ delegate: SliverChildBuilderDelegate(
                 child: SmallTile(
                   p: p1,
                   onTap: () {
-                    final id = p1['id'] as int;
+                    final id = (p1['_id'] ?? p1['id'] ?? '').toString();
                     Get.to(() => ProductDetailPage(key: ValueKey(id), productId: id),
                         binding: ProductDetailBinding(id));
                   },
@@ -765,7 +765,7 @@ delegate: SliverChildBuilderDelegate(
                     : SmallTile(
                         p: p2!,
                         onTap: () {
-                          final id = p2!['id'] as int;
+                          final id = (p2!['_id'] ?? p2!['id'] ?? '').toString();
                           Get.to(() => ProductDetailPage(key: ValueKey(id), productId: id),
                               binding: ProductDetailBinding(id));
                         },
@@ -916,7 +916,7 @@ class _BigTile extends StatelessWidget {
       padding: const EdgeInsets.all(2),
       // We’re on PDP, so we have the product map `p`
       child: WishButton(
-        id: (p['id'] as num).toInt(),
+        id: (p['_id'] ?? p['id'] ?? '').toString(),
         name: (p['name'] ?? '').toString(),
         // priceHtml is optional here; pass null or a formatted string if you want
         image: (p['images'] is List && (p['images'] as List).isNotEmpty)
@@ -994,9 +994,20 @@ class SmallTile extends StatelessWidget {
     final name = (HtmlDecode.text(p['name'] )as String? ?? '').trim();
     final priceText = _priceTextFrom(p);
     final sources = _imagesFromProduct(p);
-    final firstImg = (p['images'] is List && (p['images'] as List).isNotEmpty)
-        ? (((p['images'] as List).first as Map)['src']?.toString())
-        : null;
+    // Safely extract first image: supports 'imageUrl', 'url', 'src' keys + featuredImage fallback
+    String? firstImg;
+    if (p['images'] is List && (p['images'] as List).isNotEmpty) {
+      final first = (p['images'] as List).first;
+      if (first is Map) {
+        firstImg = (first['imageUrl'] ?? first['url'] ?? first['src'])?.toString();
+      } else {
+        firstImg = first?.toString();
+      }
+    }
+    firstImg ??= p['featuredImage']?.toString();
+    if (firstImg != null && firstImg.isNotEmpty && !firstImg.startsWith('http')) {
+      firstImg = 'https://backend.tobeque.com$firstImg';
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1064,7 +1075,7 @@ class SmallTile extends StatelessWidget {
               ],
             ),
         WishButton(
-          id: (p['id'] as num).toInt(),
+          id: (p['_id'] ?? p['id'] ?? '').toString(),
           name: name,
           image: firstImg,
           size: 20,

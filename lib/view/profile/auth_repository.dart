@@ -1,17 +1,18 @@
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:tobeque/constants/api_constants.dart';
 
 class AuthRepository {
   final Dio _dio;
   AuthRepository(this._dio);
 
   static const _kTokenKey = 'auth_token';
-  static const _kUserIdKey = 'wp_user_id';
+  static const _kUserIdKey = 'user_id';
 
   Future<String?> getToken() async {
     final sp = await SharedPreferences.getInstance();
     return sp.getString(_kTokenKey);
-    }
+  }
 
   Future<void> saveToken(String token) async {
     final sp = await SharedPreferences.getInstance();
@@ -24,88 +25,107 @@ class AuthRepository {
     await sp.remove(_kUserIdKey);
   }
 
-  Future<int?> getUserId() async {
+  Future<String?> getUserId() async {
     final sp = await SharedPreferences.getInstance();
-    return sp.getInt(_kUserIdKey);
+    return sp.getString(_kUserIdKey);
   }
 
-  Future<void> saveUserId(int id) async {
+  Future<void> saveUserId(String id) async {
     final sp = await SharedPreferences.getInstance();
-    await sp.setInt(_kUserIdKey, id);
+    await sp.setString(_kUserIdKey, id);
   }
 
   // ---------- Auth ----------
-  Future<String> login({
-    required String username,
+  Future<Map<String, dynamic>> login({
+    required String identifier,
     required String password,
-    required String baseUrl,
   }) async {
-    final url = '$baseUrl/wp-json/jwt-auth/v1/token';
-    final res = await _dio.post(url, data: {
-      'username': username,
+    final res = await _dio.post(ApiConstant.login, data: {
+      'identifier': identifier,
+      'email': identifier,
+      'phone': identifier,
       'password': password,
     });
-    final data = res.data as Map<String, dynamic>;
-    final token = data['token']?.toString();
-    if (token == null || token.isEmpty) {
-      throw 'Invalid credentials';
+    final data = Map<String, dynamic>.from(res.data);
+    if (data['token'] != null) {
+      await saveToken(data['token'].toString());
     }
-    return token;
+    return data;
   }
 
-  Future<Map<String, dynamic>> fetchMe({
-    required String baseUrl,
-    required String token,
+  Future<Map<String, dynamic>> register({
+    required String firstName,
+    required String lastName,
+    required String email,
+    required String phone,
+    required String password,
   }) async {
-    final url = '$baseUrl/wp-json/wp/v2/users/me';
-    final res = await _dio.get(url, options: Options(headers: {
-      'Authorization': 'Bearer $token',
-      'Accept': 'application/json',
-    }));
+    final res = await _dio.post(ApiConstant.register, data: {
+      'firstName': firstName,
+      'lastName': lastName,
+      'email': email,
+      'phone': phone,
+      'password': password,
+    });
+    final data = Map<String, dynamic>.from(res.data);
+    if (data['token'] != null) {
+      await saveToken(data['token'].toString());
+    }
+    return data;
+  }
+
+  Future<Map<String, dynamic>> sendOtp(String phone) async {
+    final res = await _dio.post(ApiConstant.sendOtp, data: {'phone': phone});
     return Map<String, dynamic>.from(res.data);
   }
 
-  // ---------- Woo Customer (addresses) ----------
-  Future<Map<String, dynamic>> fetchCustomer({
-    required String baseUrl,
-    required int userId,
-    required String token,
-  }) async {
-    final url = '$baseUrl/wp-json/wc/v3/customers/$userId';
-    final res = await _dio.get(url, options: Options(headers: {
-      'Authorization': 'Bearer $token',
+  Future<Map<String, dynamic>> verifyOtp(String phone, String otp) async {
+    final res = await _dio.post(ApiConstant.verifyOtp, data: {'phone': phone, 'otp': otp});
+    final data = Map<String, dynamic>.from(res.data);
+    if (data['token'] != null) {
+      await saveToken(data['token'].toString());
+    }
+    return data;
+  }
+
+  Future<Map<String, dynamic>> fetchMe({String? token}) async {
+    final jwt = token ?? await getToken();
+    final res = await _dio.get(ApiConstant.userProfile, options: Options(headers: {
+      if (jwt != null) 'Authorization': 'Bearer $jwt',
       'Accept': 'application/json',
     }));
-    return Map<String, dynamic>.from(res.data);
+    final data = Map<String, dynamic>.from(res.data);
+    return (data['user'] as Map?)?.cast<String, dynamic>() ?? data;
   }
 
   Future<Map<String, dynamic>> updateCustomer({
-    required String baseUrl,
-    required int userId,
-    required String token,
-    Map<String, dynamic>? payload,
+    String? token,
+    required Map<String, dynamic> payload,
   }) async {
-    final url = '$baseUrl/wp-json/wc/v3/customers/$userId';
-    final res = await _dio.put(url, data: payload ?? {}, options: Options(headers: {
-      'Authorization': 'Bearer $token',
+    final jwt = token ?? await getToken();
+    final res = await _dio.put(ApiConstant.userProfile, data: payload, options: Options(headers: {
+      if (jwt != null) 'Authorization': 'Bearer $jwt',
       'Content-Type': 'application/json',
       'Accept': 'application/json',
     }));
-    return Map<String, dynamic>.from(res.data);
+    final data = Map<String, dynamic>.from(res.data);
+    return (data['user'] as Map?)?.cast<String, dynamic>() ?? data;
   }
 
   // ---------- Orders ----------
-  Future<List<Map<String, dynamic>>> fetchOrders({
-    required String baseUrl,
-    required int userId,
-    required String token,
-  }) async {
-    final url = '$baseUrl/wp-json/wc/v3/orders?customer=$userId&orderby=date&order=desc';
-    final res = await _dio.get(url, options: Options(headers: {
-      'Authorization': 'Bearer $token',
+  Future<List<Map<String, dynamic>>> fetchOrders({String? token}) async {
+    final jwt = token ?? await getToken();
+    final res = await _dio.get(ApiConstant.userOrders, options: Options(headers: {
+      if (jwt != null) 'Authorization': 'Bearer $jwt',
       'Accept': 'application/json',
     }));
-    final list = res.data as List;
-    return list.map((e) => Map<String, dynamic>.from(e)).toList();
+    final data = res.data;
+    if (data is Map && data['orders'] is List) {
+      return (data['orders'] as List).map((e) => Map<String, dynamic>.from(e)).toList();
+    } else if (data is List) {
+      return data.map((e) => Map<String, dynamic>.from(e)).toList();
+    }
+    return [];
   }
 }
+

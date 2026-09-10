@@ -62,17 +62,31 @@ Future<void> refreshHome() async {
       final results = await Future.wait<dynamic>([
         repo.fetchHero(),
         repo.fetchCategories(perPage: 15),
-        repo.fetchBestSellers(perPage: 12),
+        repo.fetchBestSellers(perPage: 50),
         repo.fetchHeroVideoUrl(),
       ]);
 
       heroData.value = results[0] as WpPageHero?;
       cats.assignAll(results[1] as List<WcCategory>);
       best.assignAll(results[2] as List<WcProduct>);
-      heroVideoUrl.value = results[3] as String?;
-heroVideoUrl.value = 'https://www.youtube.com/shorts/EmVHGtpCT2Y';
-//https://www.youtube.com/shorts/EmVHGtpCT2Y
-await _prepareHeroMedia();
+      
+      String? vUrl;
+      final hero = heroData.value;
+      if (hero != null && hero.mobileBanners.isNotEmpty) {
+        final modifiableBanners = List<String>.from(hero.mobileBanners);
+        final videoUrls = modifiableBanners.where((url) => 
+            url.toLowerCase().endsWith('.mp4') || 
+            url.toLowerCase().endsWith('.webm') || 
+            url.toLowerCase().contains('.m3u8')).toList();
+        if (videoUrls.isNotEmpty) {
+          vUrl = videoUrls.first;
+          modifiableBanners.removeWhere((url) => videoUrls.contains(url));
+          hero.mobileBanners = modifiableBanners;
+        }
+      }
+      heroVideoUrl.value = vUrl ?? results[3] as String?;
+      
+      await _prepareHeroMedia();
     } catch (e) {
       error.value = e.toString();
     } finally {

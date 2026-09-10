@@ -3,9 +3,9 @@ import 'package:get/get.dart';
 import 'package:tobeque/services/shared_pref.dart';
 
 class WishItem {
-  final int id;
+  final String id; // MongoDB _id string
   final String name;
-  final String? priceHtml; // raw HTML, leave as-is (you already decode in UI)
+  final String? priceHtml;
   final String? image;
 
   WishItem({required this.id, required this.name, this.priceHtml, this.image});
@@ -18,7 +18,7 @@ class WishItem {
   };
 
   factory WishItem.fromJson(Map<String, dynamic> m) => WishItem(
-    id: (m['id'] as num).toInt(),
+    id: (m['id'] ?? m['_id'] ?? '').toString(),
     name: (m['name'] ?? '').toString(),
     priceHtml: m['priceHtml']?.toString(),
     image: m['image']?.toString(),
@@ -26,14 +26,14 @@ class WishItem {
 }
 
 class WishlistService extends GetxService {
-  static const _kKey = 'wishlist_items_v1';
+  static const _kKey = 'wishlist_items_v2'; // v2 key since id type changed
 
   /// Map of productId -> WishItem (reactive)
-  final items = <int, WishItem>{}.obs;
+  final items = <String, WishItem>{}.obs;
 
   int get count => items.length;
 
-  bool isIn(int id) => items.containsKey(id);
+  bool isIn(String id) => items.containsKey(id);
 
   Future<void> onInit() async {
     super.onInit();
@@ -54,7 +54,7 @@ class WishlistService extends GetxService {
         for (final x in decoded) {
           final m = (x as Map).cast<String, dynamic>();
           final wi = WishItem.fromJson(m);
-          items[wi.id] = wi;
+          if (wi.id.isNotEmpty) items[wi.id] = wi;
         }
       }
     } catch (_) {}
@@ -65,7 +65,7 @@ class WishlistService extends GetxService {
     _persist();
   }
 
-  void remove(int id) {
+  void remove(String id) {
     items.remove(id);
     _persist();
   }

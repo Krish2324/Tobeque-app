@@ -10,9 +10,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 const _kBaseUrl = 'https://tobeque.com';
 
 /// WooCommerce REST (consumer key/secret) — used for in-app SignUp/Reset.
-/// NOTE: Shipping keys in a client app can be abused if leaked (a proxy is safer).
-const _wcCk = ApiConstant.consumerKey;
-const _wcCs = ApiConstant.consumerSecret;
+const _wcCk = '';
+const _wcCs = '';
+
 
 /// Build WC v3 URL with CK/CS attached
 Uri _wcUrl(String path, [Map<String, dynamic>? q]) {
@@ -90,8 +90,58 @@ class AuthController extends GetxController {
   }
 
   /* ------------------------------------------------------------------------
-   * LOGIN (JWT, still in-app)
+   * SEND OTP (Phone Number Login — Step 1)
    * --------------------------------------------------------------------- */
+  Future<void> sendOtp(String phone) async {
+    loading.value = true;
+    error.value = null;
+    try {
+      await dio.post('${ApiConstant.apiBase}/user-auth/send-otp', data: {'phone': phone});
+    } on DioException catch (e) {
+      error.value = _prettyError(e) ?? 'Failed to send OTP';
+    } catch (e) {
+      error.value = e.toString();
+    } finally {
+      loading.value = false;
+    }
+  }
+
+  /* ------------------------------------------------------------------------
+   * VERIFY OTP (Phone Number Login — Step 2)
+   * --------------------------------------------------------------------- */
+  Future<void> verifyOtp(String phone, String otp) async {
+    loading.value = true;
+    error.value = null;
+    try {
+      final res = await dio.post('${ApiConstant.apiBase}/user-auth/verify-otp', data: {
+        'phone': phone,
+        'otp': otp,
+      });
+      final data = res.data is Map ? res.data as Map : {};
+      final token = data['token']?.toString();
+      final user = data['user'];
+      if (token != null && token.isNotEmpty) {
+        _token = token;
+        _name = (user is Map ? (user['name'] ?? user['firstName'] ?? '') : '').toString();
+        _email = (user is Map ? (user['email'] ?? '') : '').toString();
+        final sp = await SharedPreferences.getInstance();
+        await sp.setString(_Keys.token, token);
+        await sp.setString(_Keys.name, _name);
+        await sp.setString(_Keys.email, _email);
+        loggedIn.value = true;
+      } else {
+        error.value = 'OTP verification failed. Please try again.';
+      }
+    } on DioException catch (e) {
+      error.value = _prettyError(e) ?? 'Invalid OTP';
+    } catch (e) {
+      error.value = e.toString();
+    } finally {
+      loading.value = false;
+    }
+  }
+
+
   Future<void> login(String user, String pass, {bool staySignedIn = false}) async {
     loading.value = true;
     error.value = null;

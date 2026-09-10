@@ -41,20 +41,24 @@ android {
     // ------------ SIGNING CONFIG -----------------
     signingConfigs {
         create("release") {
-            keyAlias = keystoreProperties["keyAlias"] as String?
-            keyPassword = keystoreProperties["keyPassword"] as String?
-            storeFile = file(keystoreProperties["storeFile"] as String)
-            storePassword = keystoreProperties["storePassword"] as String?
+            if (keystorePropertiesFile.exists() && keystoreProperties["storeFile"] != null) {
+                keyAlias = keystoreProperties["keyAlias"] as String?
+                keyPassword = keystoreProperties["keyPassword"] as String?
+                storeFile = file(keystoreProperties["storeFile"] as String)
+                storePassword = keystoreProperties["storePassword"] as String?
+            }
         }
     }
     // ----------------------------------------------
 
     buildTypes {
         release {
-            // Use release keystore instead of debug keys
-            signingConfig = signingConfigs.getByName("release")
+            if (keystorePropertiesFile.exists() && keystoreProperties["storeFile"] != null) {
+                signingConfig = signingConfigs.getByName("release")
+            } else {
+                signingConfig = signingConfigs.getByName("debug")
+            }
             
-            // Optional (recommended)
             isMinifyEnabled = false
             isShrinkResources = false
         }

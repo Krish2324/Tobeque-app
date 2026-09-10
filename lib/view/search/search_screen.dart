@@ -136,7 +136,7 @@ class SearchScreen extends GetView<SearchController> {
                           (context, index) {
                             final p = items[index];
                            
-                            final id = (p['id'] as num).toInt();
+                            final id = (p['_id'] ?? p['id'] ?? '').toString();
 
                             return InkWell(
                                onTap: () {

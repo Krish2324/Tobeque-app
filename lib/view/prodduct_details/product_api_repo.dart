@@ -1,36 +1,39 @@
 import 'dart:math' as math;
 import 'package:tobeque/view/cart/cart_bus.dart';
 import 'package:intl/intl.dart';
+import 'package:tobeque/constants/api_constants.dart';
 import 'package:tobeque/data/network/network_api_sarvices.dart';
 
 class ProductApi {
   ProductApi(this.net);
   final NetworkApi net;
 
-  static const String base = 'https://tobeque.com/wp-json/wc/store/v1';
-
   // ---------- Products ----------
 
-  Future<Map<String, dynamic>> fetchProduct(int id) async {
-    final data = await net.getApi('$base/products/$id');
+  Future<Map<String, dynamic>> fetchProduct(dynamic id) async {
+    final data = await net.getApi('${ApiConstant.products}/$id');
+    if (data is Map && data['product'] != null) {
+      return (data['product'] as Map).cast<String, dynamic>();
+    }
     return (data as Map).cast<String, dynamic>();
   }
 
   Future<List<Map<String, dynamic>>> fetchRelatedByFirstCategory({
-    required int productId,
+    required dynamic productId,
     required List cats,
     int perPage = 12,
   }) async {
-    if (cats.isEmpty) return [];
-    final catId = (cats.first as Map)['id'];
-    final data = await net.getApi(
-      '$base/products?category=$catId&per_page=$perPage&exclude=$productId',
-    );
-    return (data as List).map((e) => (e as Map).cast<String, dynamic>()).toList();
+    final data = await net.getApi('${ApiConstant.products}?status=published&limit=$perPage');
+    if (data is Map && data['products'] is List) {
+      return (data['products'] as List)
+          .map((e) => (e as Map).cast<String, dynamic>())
+          .where((p) => p['_id']?.toString() != productId.toString() && p['id']?.toString() != productId.toString())
+          .toList();
+    }
+    return [];
   }
 
   /// Add to cart (Store API; NetworkApi will fallback to wc-ajax if needed).
-
 
 // ... inside ProductApi
 
@@ -94,26 +97,15 @@ Future<Map<String, dynamic>> removeCartItem(String key) async {
     return (data as Map).cast<String, dynamic>();
   }
 
-
-
-  
-
-
   // ---------- Helpers ----------
 
-  /// Format Woo Store API prices: divide minor units and add symbol.
-  static String formatPrice(Map<String, dynamic>? prices) {
-    if (prices == null) return "";
-    final raw = prices['price']?.toString() ?? '';
-    if (raw.isEmpty) return "";
-    final minorDigits = (prices['currency_minor_unit'] is int)
-        ? prices['currency_minor_unit'] as int
-        : 2;
-    final sym = prices['currency_symbol']?.toString() ?? '₹';
-
-    final numRaw = double.tryParse(raw) ?? 0;
-    final value = numRaw / math.pow(10, minorDigits);
-
-    return "$sym${NumberFormat.decimalPattern().format(value)}";
+  static String formatPrice(dynamic priceVal) {
+    if (priceVal == null) return "₹0";
+    if (priceVal is Map) {
+      final p = priceVal['price'] ?? priceVal['regularPrice'] ?? priceVal['value'];
+      return formatPrice(p);
+    }
+    final numVal = double.tryParse(priceVal.toString().replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0;
+    return "₹${numVal.toStringAsFixed(0)}";
   }
 }

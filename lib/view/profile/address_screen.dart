@@ -68,18 +68,6 @@ class AddressScreen extends GetView<AddressController> {
                     onSave: controller.saveShipping,
                   ),
                 const SizedBox(height: 12),
-                Obx(() => SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: controller.saving.value ? null : controller.pushToCart,
-                    icon: const Icon(Icons.local_shipping_outlined),
-                    label: const Text('Use these for shipping now'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.black, foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
-                  ),
-                )),
               ],
             ),
           ),

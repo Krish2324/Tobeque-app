@@ -672,7 +672,7 @@ class SuggestStrip extends GetView<CartController> {
                                                     
                             child: WishButton(
                               
-                                  id: (p['id'] as num).toInt(),
+                                  id: (p['_id'] ?? p['id'] ?? '').toString(),
                                 name: (p['name'] ?? '').toString(),
                                 priceHtml: p['price_html']?.toString(),
                                 image: (() {

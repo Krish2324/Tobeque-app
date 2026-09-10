@@ -11,15 +11,15 @@ import 'package:tobeque/componant/shimmer_componant.dart';
 
 
 /// ---------- Data layer (self-contained) ----------
-// const _base = 'https://tobeque.com/wp-json/wc/v3';
-const _base = "${ApiConstant.baseUrl}/${ApiConstant.restPrefix}/wc/v3";
+
 class WcCat {
-  final int id, parent;
+  final String id; // MongoDB _id string
+  final String parent;
   final String name, slug;
   WcCat({required this.id, required this.parent, required this.name, required this.slug});
   factory WcCat.fromJson(Map j) => WcCat(
-        id: (j['id'] as num).toInt(),
-        parent: (j['parent'] as num).toInt(),
+        id: (j['_id'] ?? j['id'] ?? '').toString(),
+        parent: (j['parent'] ?? '').toString(),
         name: (j['name'] ?? '').toString(),
         slug: (j['slug'] ?? '').toString(),
       );
@@ -29,28 +29,20 @@ class CatRepo {
   final Dio _dio = Dio();
 
   Future<List<WcCat>> fetchAllCats({bool hideEmpty = true}) async {
-    final out = <WcCat>[];
-    int page = 1;
-    const per = 100;
-
-    while (true) {
-      final res = await _dio.get('$_base/products/categories', queryParameters: {
-        'page': page,
-        'per_page': per,
-        'consumer_key': ApiConstant.consumerKey,
-        'consumer_secret': ApiConstant.consumerSecret,
-        if (hideEmpty) 'hide_empty': 'true',
-        'orderby': 'name',
-        'order': 'asc',
-      });
-
-      final list = (res.data as List).cast<Map>();
-      out.addAll(list.map(WcCat.fromJson));
-
-      if (list.length < per) break;
-      page++;
+    final res = await _dio.get(ApiConstant.categories);
+    final data = res.data;
+    List list = [];
+    if (data is Map && data['categories'] is List) {
+      list = data['categories'];
+    } else if (data is List) {
+      list = data;
     }
-    return out;
+    return list.map((j) => WcCat(
+      id: (j['_id'] ?? j['id'] ?? '').toString(),
+      parent: (j['parent'] ?? '').toString(),
+      name: (j['name'] ?? '').toString(),
+      slug: (j['slug'] ?? '').toString(),
+    )).toList();
   }
 }
 
@@ -71,8 +63,8 @@ class _MenuScreenState extends State<MenuScreen> with SingleTickerProviderStateM
   // “top bars” like the screenshot
   static const _tabs = ['POPULER', ];
   late final TabController _tab = TabController(length: _tabs.length, vsync: this);
-final Set<int> _open = <int>{}; // which parent categories are expanded
-List<WcCat> _childrenOf(int parentId) =>
+final Set<String> _open = <String>{}; // which parent categories are expanded
+List<WcCat> _childrenOf(String parentId) =>
     _all.where((c) => c.parent == parentId).toList()
       ..sort((a, b) => a.name.compareTo(b.name));
 
@@ -118,7 +110,7 @@ List<WcCat> _childrenOf(int parentId) =>
 WcCat? _findRoot(String label) {
   final l = label.toLowerCase();
   for (final c in _all) {
-    if (c.parent == 0 &&
+    if ((c.parent == '' || c.parent == '0') &&
         (c.name.toLowerCase() == l || c.slug.toLowerCase() == l)) {
       return c;
     }
@@ -126,7 +118,7 @@ WcCat? _findRoot(String label) {
   return null;
 }
 
-WcCat? _findByNameStarts(String prefix, {int? withinParent}) {
+WcCat? _findByNameStarts(String prefix, {String? withinParent}) {
   final p = prefix.toLowerCase();
   for (final c in _all) {
     if ((withinParent == null || c.parent == withinParent) &&
@@ -216,7 +208,7 @@ WcCat? _findByNameStarts(String prefix, {int? withinParent}) {
                 children: _tabs.map((t) {
                   final root = _findRoot(t);
                   final children = (root == null)
-                      ? (_all.where((c) => c.parent == 0).toList()..sort((a, b) => a.name.compareTo(b.name)))
+                      ? (_all.where((c) => c.parent == '' || c.parent == '0').toList()..sort((a, b) => a.name.compareTo(b.name)))
                       : _childrenOf(root.id);
       
                   // Try to pick the 4 “headline” categories (NEW / ECKŌ… / BEST SELLERS / SPECIAL PRICES)

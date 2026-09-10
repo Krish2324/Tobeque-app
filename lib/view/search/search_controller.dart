@@ -68,10 +68,20 @@ class SearchController extends GetxController {
       // Woo Store API search
       // NOTE: This mirrors /?s= by using /products?search=<q>
       final path =
-          'products?search=${Uri.encodeQueryComponent(query.value)}&per_page=$_perPage&page=$_page';
+          'products?search=${Uri.encodeQueryComponent(query.value)}&limit=$_perPage&page=$_page';
       final data = await _net.getApi(path);
 
-      final list = (data as List?) ?? const [];
+      List list = [];
+      if (data is Map) {
+        if (data['data'] != null && data['data']['products'] is List) {
+          list = data['data']['products'];
+        } else if (data['products'] is List) {
+          list = data['products'];
+        }
+      } else if (data is List) {
+        list = data;
+      }
+
       final mapped = list.map((e) => (e as Map).cast<String, dynamic>()).toList();
 
       if (append) {
@@ -90,17 +100,18 @@ class SearchController extends GetxController {
     }
   }
 
-  /// Pick the best image from a product object
   String? pickImage(Map<String, dynamic> product) {
-    final imgs = (product['images'] as List?) ?? const [];
-    if (imgs.isEmpty) return null;
-    final m = (imgs.first as Map).cast<String, dynamic>();
-    return m['src']?.toString() ?? m['thumbnail']?.toString();
+    dynamic imgs = product['images'];
+    if (imgs is List && imgs.isNotEmpty) {
+      final first = imgs.first;
+      if (first is Map) {
+        return first['url']?.toString() ?? first['src']?.toString();
+      }
+    }
+    return product['featuredImage']?.toString();
   }
 
   String priceText(Map<String, dynamic> product) {
-    return ProductApi.formatPrice(
-      (product['prices'] as Map?)?.cast<String, dynamic>(),
-    );
+    return '₹${product['price'] ?? product['regularPrice'] ?? 0}';
   }
 }

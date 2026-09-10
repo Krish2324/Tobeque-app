@@ -4,7 +4,7 @@ import 'package:tobeque/constants/api_constants.dart';
 import 'package:tobeque/data/dio_client.dart';
 
 class JournalPost {
-  final int id;
+  final dynamic id;
   final String title;
   final String link;
   final String? imageUrl;
@@ -22,7 +22,7 @@ class JournalPost {
 }
 
 class JournalPostDetails {
-  final int id;
+  final dynamic id;
   final String title;
   final String link;
   final String? imageUrl;
@@ -43,82 +43,55 @@ class StyleJournalRepository {
   final Dio _dio = DioClient.build();
   final _un = HtmlUnescape();
 
-  Future<int?> _categoryIdBySlug(String slug) async {
-    final url = ApiConstant.wp('categories?slug=$slug');
-    final res = await _dio.get(url);
-    if (res.data is List && (res.data as List).isNotEmpty) {
-      return (res.data[0]['id'] as num).toInt();
-    }
-    return null;
-  }
-
-  /// List posts from the `style-journal` category using WP JSON
   Future<List<JournalPost>> fetchPosts({int page = 1, int perPage = 10}) async {
-    final catId = await _categoryIdBySlug('style-journal');
-
-    final qp = <String, dynamic>{
-      'page': page,
-      'per_page': perPage,
-      '_embed': '1',
-      if (catId != null) 'categories': catId,
-    };
-
-    final res = await _dio.get(ApiConstant.wp('posts'), queryParameters: qp);
-    final List data = (res.data is List) ? res.data : const [];
-
-    return data.map<JournalPost>((p) {
-      final id = (p['id'] as num).toInt();
-      final title = _stripHtml(p['title']?['rendered'] ?? '');
-      final link = (p['link'] ?? '').toString();
-      final dateStr = (p['date'] ?? '').toString();
-      final dt = DateTime.tryParse(dateStr) ?? DateTime.now();
-
-      String? img;
-      final media = p['_embedded']?['wp:featuredmedia'];
-      if (media is List && media.isNotEmpty) {
-        img = (media[0]['source_url'] as String?)?.trim();
+    try {
+      final res = await _dio.get('${ApiConstant.apiBase}/blogs?status=published&page=$page&limit=$perPage');
+      final data = res.data;
+      List list = [];
+      if (data is Map && data['blogs'] is List) {
+        list = data['blogs'];
+      } else if (data is List) {
+        list = data;
       }
 
-      final excerpt = _stripHtml(p['excerpt']?['rendered'] ?? '');
+      return list.map<JournalPost>((p) {
+        final id = (p['_id'] ?? p['id'] ?? 0).hashCode;
+        final title = (p['title'] ?? '').toString();
+        final img = ApiConstant.getImageUrl(p['featuredImage'] ?? p['image']);
+        final dateStr = (p['createdAt'] ?? p['date'] ?? '').toString();
+        final dt = DateTime.tryParse(dateStr) ?? DateTime.now();
+        final excerpt = (p['summary'] ?? p['excerpt'] ?? '').toString();
 
-      return JournalPost(
-        id: id,
-        title: _un.convert(title),
-        link: link,
-        imageUrl: img,
-        date: dt,
-        excerpt: _un.convert(excerpt),
-      );
-    }).toList();
+        return JournalPost(
+          id: id,
+          title: _un.convert(title),
+          link: '',
+          imageUrl: img,
+          date: dt,
+          excerpt: _un.convert(excerpt),
+        );
+      }).toList();
+    } catch (_) {
+      return [];
+    }
   }
 
-  /// Single post detail (HTML content in JSON)
-  Future<JournalPostDetails> fetchPost(int id) async {
-    final res = await _dio.get(
-      ApiConstant.wp('posts/$id'),
-      queryParameters: {'_embed': '1'},
-    );
-    final p = res.data as Map<String, dynamic>;
+  Future<JournalPostDetails> fetchPost(dynamic id) async {
+    final res = await _dio.get('${ApiConstant.apiBase}/blogs/$id');
+    final p = (res.data is Map && res.data['blog'] != null) ? res.data['blog'] as Map<String, dynamic> : res.data as Map<String, dynamic>;
 
-    String? img;
-    final media = p['_embedded']?['wp:featuredmedia'];
-    if (media is List && media.isNotEmpty) {
-      img = (media[0]['source_url'] as String?)?.trim();
-    }
-
-    final dateStr = (p['date'] ?? '').toString();
+    final img = ApiConstant.getImageUrl(p['featuredImage'] ?? p['image']);
+    final dateStr = (p['createdAt'] ?? p['date'] ?? '').toString();
     final dt = DateTime.tryParse(dateStr) ?? DateTime.now();
 
     return JournalPostDetails(
-      id: (p['id'] as num).toInt(),
-      title: _un.convert(_stripHtml(p['title']?['rendered'] ?? '')),
-      link: (p['link'] ?? '').toString(),
+      id: (p['_id'] ?? p['id'] ?? 0).hashCode,
+      title: _un.convert((p['title'] ?? '').toString()),
+      link: '',
       imageUrl: img,
       date: dt,
-      contentHtml: (p['content']?['rendered'] ?? '').toString(),
+      contentHtml: (p['content'] ?? '').toString(),
     );
   }
-
-  String _stripHtml(String s) =>
-      s.replaceAll(RegExp(r'<[^>]*>'), '').replaceAll('&nbsp;', ' ').trim();
 }
+

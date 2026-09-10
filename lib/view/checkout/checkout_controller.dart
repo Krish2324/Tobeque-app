@@ -1,22 +1,19 @@
 // lib/view/checkout/checkout_controller.dart
 import 'dart:async';
-import 'dart:math';
+import 'package:tobeque/constants/api_constants.dart';
 import 'package:tobeque/view/checkout/checkout_sucess_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:dio/dio.dart';
 import 'package:tobeque/data/network/network_api_sarvices.dart';
-import 'package:tobeque/view/profile/profile_controller.dart'; // for local cached addresses (optional)
 
 class CheckoutController extends GetxController {
   final api = NetworkApi();
-// currency meta (filled from cart->totals)
-int currencyMinorUnit = 2;
-String currencySymbol = '';
-String decimalSep = '.';
-String thousandSep = ',';
 
-  // ----- state -----
+  int currencyMinorUnit = 2;
+  String currencySymbol = '₹';
+  String decimalSep = '.';
+  String thousandSep = ',';
+
   final loading = true.obs;
   final mutating = false.obs;
   final error = RxnString();
@@ -24,18 +21,15 @@ String thousandSep = ',';
   final items = <Map<String, dynamic>>[].obs;
   final totals = <String, dynamic>{}.obs;
   final appliedCoupons = <String>[].obs;
+  final discountAmount = 0.0.obs;
 
-  // user (login or guest)
   final me = Rxn<Map<String, dynamic>>();
 
-  // ----- saved addresses (from Cart Store API or Auth cache) -----
   final savedBilling  = <String, dynamic>{}.obs;
   final savedShipping = <String, dynamic>{}.obs;
 
-  /// -1 none, 0 = Billing, 1 = Shipping (for radio selection)
   final selectedSaved = RxnInt();
 
-  // ----- billing form -----
   final formKey = GlobalKey<FormState>();
   final firstName = TextEditingController();
   final lastName  = TextEditingController();
@@ -49,87 +43,45 @@ String thousandSep = ',';
   final phone     = TextEditingController();
   final email     = TextEditingController();
 
-  // shipping = billing toggle
   final shipToDifferent = false.obs;
 
-  // shipping section
-  final shippingRates = <Map<String, dynamic>>[].obs; // {package_id, rate_id, name, description, price}
-  final selectedShippingKey = RxnString(); // "$packageId|$rateId"
+  final shippingRates = <Map<String, dynamic>>[].obs;
+  final selectedShippingKey = RxnString();
+  final shippingCost = 0.0.obs;
 
-  // payment section
-  final paymentMethods = <Map<String, dynamic>>[].obs; // {id,title,description}
-  final selectedPaymentId = ''.obs;
+  final paymentMethods = <Map<String, dynamic>>[
+    {'id': 'cod', 'title': 'Cash on Delivery', 'description': 'Pay with cash upon delivery'},
+    {'id': 'razorpay', 'title': 'Online Payment (Razorpay)', 'description': 'UPI, Cards, Netbanking'},
+  ].obs;
+  final selectedPaymentId = 'cod'.obs;
 
-  // coupon + note
   final couponCtrl = TextEditingController();
   final noteCtrl = TextEditingController();
 
-  // helpers
- String formatPrice(dynamic value) {
-  if (value == null) return '';
-
-  // If API already sent a pretty string like "₹4,500.00"
-  final s = value.toString();
-  if (s.contains(currencySymbol) || s.contains(decimalSep)) {
-    // looks already formatted
-    return s;
+  void useSaved(bool isBilling) {
+    final addr = isBilling ? savedBilling : savedShipping;
+    if (addr.isEmpty) return;
+    firstName.text = (addr['first_name'] ?? addr['name'] ?? '').toString();
+    address1.text = (addr['address_1'] ?? addr['street'] ?? '').toString();
+    city.text = (addr['city'] ?? '').toString();
+    state.text = (addr['state'] ?? '').toString();
+    postcode.text = (addr['postcode'] ?? addr['zip'] ?? '').toString();
+    phone.text = (addr['phone'] ?? '').toString();
+    selectedSaved.value = isBilling ? 0 : 1;
   }
 
-  // Map format: { value: 450000, amount: "₹4,500.00" }
-  if (value is Map) {
-    final amt = value['amount']?.toString();
-    if (amt != null && amt.isNotEmpty) return amt;
-    final v = value['value'];
-    if (v is num) return _formatMinor(v);
-    final vs = v?.toString();
-    if (vs != null) {
-      final n = num.tryParse(vs);
-      if (n != null) return _formatMinor(n);
-    }
-    return s;
+  String addressPretty(Map<String, dynamic> a) {
+    final name = (a['first_name'] ?? a['name'] ?? '').toString();
+    final street = (a['address_1'] ?? a['street'] ?? '').toString();
+    final cityStr = (a['city'] ?? '').toString();
+    final stateStr = (a['state'] ?? '').toString();
+    final zipStr = (a['postcode'] ?? a['zip'] ?? '').toString();
+    return [name, street, '$cityStr, $stateStr $zipStr'].where((s) => s.trim().isNotEmpty).join('\n');
   }
 
-  // Raw number or numeric string
-  final n = num.tryParse(s);
-  if (n == null) return s;
-
-  // Heuristic: integers from Store API totals are in minor units.
-  // If there is no decimal point, treat as minor-units.
-  final bool looksMinor = !s.contains('.');
-  return looksMinor ? _formatMinor(n) : _formatMajor(n);
-}
-
-String _formatMinor(num minor) {
-  final major = minor / (pow(10, currencyMinorUnit));
-  return _formatWithSymbol(major);
-}
-
-String _formatMajor(num major) {
-  return _formatWithSymbol(major);
-}
-
-String _formatWithSymbol(num major) {
-  // simple formatting without bringing in intl:
-  final fixed = major.toStringAsFixed(currencyMinorUnit);
-  // add thousands separators
-  final parts = fixed.split('.');
-  String intPart = parts[0];
-  String fracPart = parts.length > 1 ? parts[1] : '';
-  final buf = StringBuffer();
-  for (int i = 0; i < intPart.length; i++) {
-    final fromRight = intPart.length - i;
-    buf.write(intPart[i]);
-    if (fromRight > 1 && fromRight % 3 == 1) buf.write(thousandSep);
+  Future<void> selectShipping(String key) async {
+    selectedShippingKey.value = key;
   }
-  final withSep = buf.toString();
-  final dec = currencyMinorUnit > 0 ? '$decimalSep$fracPart' : '';
-  return '$currencySymbol$withSep$dec';
-}
-
-
-  // (optional) access cached addresses if you hydrated them in AuthController earlier
-  AuthController? get _authOrNull =>
-      Get.isRegistered<AuthController>() ? Get.find<AuthController>() : null;
 
   @override
   void onInit() {
@@ -141,10 +93,7 @@ String _formatWithSymbol(num major) {
     loading(true);
     error.value = null;
     try {
-      await _fetchCart();                 // picks saved addresses from cart
       await _whoAmI();
-      await _loadPaymentMethods();
-      await _updateCustomerAndLoadRates(); // needs country for quote
     } catch (e) {
       error.value = e.toString();
     } finally {
@@ -156,318 +105,106 @@ String _formatWithSymbol(num major) {
     await _bootstrap();
   }
 
-  /* --------------------------- Load cart + addresses --------------------------- */
-  Future<void> _fetchCart() async {
-    final data = await api.getApi('cart') as Map<String, dynamic>;
-
-    final li = (data['items'] as List?) ?? const [];
-    items.value = li.map((e) => (e as Map).cast<String, dynamic>()).toList();
-
-    final tt = (data['totals'] as Map?)?.cast<String, dynamic>() ?? {};
-    totals.assignAll(tt);
-currencyMinorUnit = (tt['currency_minor_unit'] as num?)?.toInt() ?? 2;
-currencySymbol    = (tt['currency_symbol'] ?? '').toString();
-decimalSep        = (tt['currency_decimal_separator'] ?? '.').toString();
-thousandSep       = (tt['currency_thousand_separator'] ?? ',').toString();
-
-    // coupons (if any)
-    final coupons = (data['coupons'] as List?) ?? const [];
-    appliedCoupons.value = coupons
-        .whereType<Map>()
-        .map((m) => (m['code'] ?? '').toString())
-        .where((s) => s.isNotEmpty)
-        .toList();
-
-    // ---- pull saved addresses from cart payload (Blocks Store API) ----
-    Map<String, dynamic> _addrFromCart(String key) {
-      final top = (data[key] as Map?)?.cast<String, dynamic>();
-      if (top != null) return top;
-      final cust = (data['customer'] as Map?)?.cast<String, dynamic>();
-      final under = (cust?[key] as Map?)?.cast<String, dynamic>();
-      return under ?? <String, dynamic>{};
-    }
-
-    final bill = _addrFromCart('billing_address');
-    final ship = _addrFromCart('shipping_address');
-
-    // If cart didn’t have them yet, try cached from AuthController (optional)
-    if (bill.isEmpty && _authOrNull?.billing.isNotEmpty == true) {
-      savedBilling.assignAll(_authOrNull!.billing);
-    } else {
-      savedBilling.assignAll(bill);
-    }
-
-    if (ship.isEmpty && _authOrNull?.shipping.isNotEmpty == true) {
-      savedShipping.assignAll(_authOrNull!.shipping);
-    } else {
-      savedShipping.assignAll(ship);
-    }
-
-    // If form is empty, prefill from billing (best effort)
-    if ((firstName.text + lastName.text + address1.text).trim().isEmpty &&
-        savedBilling.isNotEmpty) {
-      _fillFormFrom(savedBilling);
-    }
-  }
-
-  /* ------------------------------ Identity ------------------------------ */
   Future<void> _whoAmI() async {
     try {
-      final res = await api.getApi('https://tobeque.com/wp-json/wp/v2/users/me');
-      me.value = (res as Map).cast<String, dynamic>();
-      // prefill email / name if present
-      final fn = (res['first_name'] ?? '').toString();
-      final ln = (res['last_name'] ?? '').toString();
-      final em = (res['email'] ?? '').toString();
-      if (fn.isNotEmpty) firstName.text = fn;
-      if (ln.isNotEmpty) lastName.text = ln;
-      if (em.isNotEmpty) email.text = em;
-    } on DioException catch (e) {
-      if ((e.response?.statusCode ?? 0) != 401) rethrow; // not guest
+      final res = await api.getApi(ApiConstant.userProfile) as Map;
+      final user = (res['user'] as Map?)?.cast<String, dynamic>() ?? res.cast<String, dynamic>();
+      me.value = user;
+      firstName.text = (user['firstName'] ?? '').toString();
+      lastName.text = (user['lastName'] ?? '').toString();
+      email.text = (user['email'] ?? '').toString();
+      phone.text = (user['phone'] ?? '').toString();
+      address1.text = (user['address'] ?? '').toString();
+      city.text = (user['city'] ?? '').toString();
+      state.text = (user['state'] ?? '').toString();
+      postcode.text = (user['zipCode'] ?? '').toString();
+    } catch (_) {
       me.value = null;
     }
   }
 
-  /* --------------------------- Payment from CART --------------------------- */
-  Future<void> _loadPaymentMethods() async {
-    final cart = await api.getApi('cart') as Map;
-    final ids = ((cart['payment_methods'] as List?) ?? const [])
-        .whereType<String>()
-        .toList();
-
-    String titleFor(String id) {
-      switch (id) {
-        case 'cod': return 'Cash on delivery';
-        case 'bacs': return 'Direct bank transfer';
-        case 'cheque': return 'Check payments';
-        case 'razorpay': return 'Razorpay';
-        case 'stripe': return 'Card (Stripe)';
-        default: return id;
-      }
-    }
-
-    paymentMethods.value = ids.map((id) => {
-      'id': id,
-      'title': titleFor(id),
-      'description': '',
-    }).toList();
-
-    selectedPaymentId.value =
-        ids.contains('cod') ? 'cod' : (ids.isNotEmpty ? ids.first : '');
-  }
-
-  /* -------------------------- Build + push address -------------------------- */
   Map<String, dynamic> _buildAddress() => {
-        'first_name': firstName.text.trim(),
-        'last_name': lastName.text.trim(),
-        'company': company.text.trim(),
-        'country': (country.text.trim().isEmpty ? 'IN' : country.text.trim()),
-        'address_1': address1.text.trim(),
-        'address_2': address2.text.trim(),
+        'name': '${firstName.text.trim()} ${lastName.text.trim()}'.trim(),
+        'phone': phone.text.trim(),
+        'street': address1.text.trim(),
         'city': city.text.trim(),
         'state': state.text.trim(),
-        'postcode': postcode.text.trim(),
-        'phone': phone.text.trim(),
-        'email': email.text.trim(),
+        'zip': postcode.text.trim(),
+        'country': 'India',
       };
 
-  Future<void> _updateCustomerAndLoadRates() async {
-    mutating(true);
-    try {
-      final addr = _buildAddress();
-
-      // Persist into current cart customer
-      await api.postApi({
-        'billing_address': addr,
-        'shipping_address': shipToDifferent.value ? addr : addr,
-        'shipping_same_as_billing': !shipToDifferent.value,
-      }, 'cart/update-customer');
-
-      // Fresh cart → rates are included nowadays
-      final cart = await api.getApi('cart') as Map<String, dynamic>;
-
-      shippingRates.clear();
-      final pkgs = (cart['shipping_rates'] as List?) ?? const [];
-      for (final p in pkgs.whereType<Map>()) {
-        final pkgId = (p['package_id'] as num?)?.toInt() ?? 0;
-        final rates = (p['rates'] as List?) ?? const [];
-        for (final r in rates.whereType<Map>()) {
-          shippingRates.add({
-            'package_id': pkgId,
-            'rate_id': r['rate_id']?.toString() ?? '',
-            'name': r['name']?.toString() ?? '',
-            'description': r['description']?.toString() ?? '',
-            'price': r['price_html']?.toString() ?? r['price']?.toString() ?? '',
-          });
-        }
-      }
-
-      if (shippingRates.isNotEmpty) {
-        final free = shippingRates.firstWhereOrNull(
-            (e) => (e['rate_id'] as String).startsWith('free_shipping'));
-        final chosen = free ?? shippingRates.first;
-        final key = '${chosen['package_id']}|${chosen['rate_id']}';
-        selectedShippingKey.value = key;
-        await selectShipping(key);
-      }
-
-      await _fetchCart(); // refresh totals & saved addresses snapshot
-    } finally {
-      mutating(false);
-    }
-  }
-
-  Future<void> selectShipping(String key) async {
-    final parts = key.split('|');
-    if (parts.length != 2) return;
-    mutating(true);
-    try {
-      await api.postApi({
-        'package_id': int.tryParse(parts[0]) ?? 0,
-        'rate_id': parts[1],
-      }, 'cart/select-shipping-rate');
-      await _fetchCart();
-    } finally {
-      mutating(false);
-    }
-  }
-
-  /* ------------------------- Use a saved address (UI) ------------------------ */
-  void useSaved(bool isBilling) {
-    final addr = isBilling ? savedBilling : savedShipping;
-    if (addr.isEmpty) return;
-    _fillFormFrom(addr);
-    // After applying, re-quote shipping etc.
-    _updateCustomerAndLoadRates();
-    selectedSaved.value = isBilling ? 0 : 1;
-  }
-
-  void _fillFormFrom(Map<String, dynamic> a) {
-    String _s(String k) => (a[k]?.toString() ?? '');
-    firstName.text = _s('first_name');
-    lastName.text  = _s('last_name');
-    company.text   = _s('company');
-    country.text   = _s('country').isEmpty ? (country.text.isEmpty ? 'IN' : country.text) : _s('country');
-    address1.text  = _s('address_1');
-    address2.text  = _s('address_2');
-    city.text      = _s('city');
-    state.text     = _s('state');
-    postcode.text  = _s('postcode');
-    phone.text     = _s('phone');
-    email.text     = _s('email').isEmpty ? email.text : _s('email');
-  }
-
-  String addressPretty(Map<String, dynamic> a) {
-    final parts = <String>[
-      [a['first_name'], a['last_name']].whereType<String>().where((s)=>s.trim().isNotEmpty).join(' ').trim(),
-      [a['address_1'], a['address_2']].whereType<String>().where((s)=>s.trim().isNotEmpty).join(', ').trim(),
-      [a['city'], a['state'], a['postcode']].whereType<String>().where((s)=>s.trim().isNotEmpty).join(', ').trim(),
-      (a['country'] ?? '').toString(),
-      (a['phone'] ?? '').toString(),
-    ].where((s) => s.isNotEmpty).toList();
-    return parts.join('\n');
-  }
-
-  /* ------------------------------ Coupons etc. ------------------------------ */
   Future<void> applyCoupon() async {
-  final code = couponCtrl.text.trim();
-  if (code.isEmpty) return;
-  mutating(true);
-  try {
-    await api.postApi({'code': code}, 'cart/apply-coupon');
-
-    // update locally immediately
-    if (!appliedCoupons.contains(code)) {
-      appliedCoupons.add(code);
+    final code = couponCtrl.text.trim();
+    if (code.isEmpty) return;
+    mutating(true);
+    try {
+      final res = await api.postApi({'code': code}, ApiConstant.validateCoupon) as Map;
+      if (res['coupon'] != null) {
+        if (!appliedCoupons.contains(code)) {
+          appliedCoupons.add(code);
+        }
+        Get.snackbar('Coupon Applied', 'Coupon $code applied successfully!');
+      }
+    } catch (e) {
+      Get.snackbar('Coupon Error', e.toString());
+    } finally {
+      mutating(false);
     }
-
-    couponCtrl.clear();
-    await _fetchCart(); // refresh totals & items
-  } finally {
-    mutating(false);
   }
-}
 
-
-Future<void> removeCoupon(String code) async {
-  mutating(true);
-  try {
-    // Remove locally first for instant UI update
+  Future<void> removeCoupon(String code) async {
     appliedCoupons.remove(code);
-
-    // Call API
-    await api.delete(null, 'cart/remove-coupon?code=$code');
-
-    // Only refetch cart if backend confirms removal
-    await _fetchCart();
-  } finally {
-    mutating(false);
+    couponCtrl.clear();
   }
-}
-
 
   Future<void> placeOrder() async {
     if (!(formKey.currentState?.validate() ?? false)) return;
-    if (selectedPaymentId.value.isEmpty) {
-      selectedPaymentId.value = 'cod';
-    }
 
     mutating(true);
     try {
       final addr = _buildAddress();
       final body = {
-        'billing_address': addr,
-        'shipping_address': shipToDifferent.value ? addr : addr,
-        'customer_note': noteCtrl.text.trim(),
-        'payment_method': selectedPaymentId.value,
-        'payment_data': <String, dynamic>{},
-        'extensions': <String, dynamic>{},
-        'terms': true,
-        'should_create_account': false,
+        'customerName': addr['name'],
+        'customerPhone': addr['phone'],
+        'shippingAddress': addr,
+        'billingAddress': addr,
+        'items': items,
+        'couponCode': appliedCoupons.isNotEmpty ? appliedCoupons.first : null,
+        'paymentMethod': selectedPaymentId.value,
+        'notes': noteCtrl.text.trim(),
+        'shippingCost': shippingCost.value,
       };
 
-      final res = await api.postApi(body, 'checkout');
-      final orderId  = (res is Map) ? res['order_id']?.toString() : null;
-      final redirect = (res is Map) ? res['redirect_url']?.toString() : null;
+      final res = await api.postApi(body, ApiConstant.placeOrder);
+      final orderId = (res is Map) ? (res['order']?['_id'] ?? res['order']?['id'] ?? res['orderId'])?.toString() : null;
 
-      await _fetchCart(); // cart will be cleared
-      Get.to(() => CheckoutSuccessScreen(orderId: orderId, redirectUrl: redirect));
-    } on DioException catch (e) {
-      final msg = e.response?.data?.toString() ?? 'Something went wrong';
-      Get.snackbar('Checkout failed', msg,
+      Get.off(() => CheckoutSuccessScreen(orderId: orderId, redirectUrl: null));
+    } catch (e) {
+      Get.snackbar('Checkout Failed', e.toString(),
           snackPosition: SnackPosition.BOTTOM, duration: const Duration(seconds: 4));
     } finally {
       mutating(false);
     }
   }
 
-  // ---- helpers for UI ----
+  String formatPrice(dynamic value) {
+    if (value == null) return '₹0';
+    return '₹${value.toString()}';
+  }
+
   String lineImage(Map<String, dynamic> item) {
-    final images = (item['images'] as List?) ?? const [];
-    if (images.isNotEmpty) {
-      final url = (images.first as Map)['src']?.toString() ?? '';
-      return url;
-    }
-    return '';
+    final url = item['image'] ?? item['featuredImage'];
+    return ApiConstant.getImageUrl(url?.toString());
   }
 
   String attrText(Map<String, dynamic> item) {
-    final raw = (item['variation'] as List?) ?? (item['attributes'] as List?) ?? const [];
+    final size = item['selectedSize'] ?? item['size'];
+    final color = item['selectedColor'] ?? item['color'];
     final parts = <String>[];
-    for (final v in raw.whereType<Map>()) {
-      final m = v.cast<String, dynamic>();
-      final n = (m['name'] ?? m['attribute'] ?? '')
-          .toString()
-          .replaceAll(RegExp(r'^pa_'), '')
-          .replaceAll('_', ' ');
-      final val = (m['value'] ?? '').toString();
-      if (val.isNotEmpty) parts.add('${n.isEmpty ? '' : '${_titleCase(n)}: '}$val');
-    }
-    return parts.join('  •  ');
+    if (size != null && size.toString().isNotEmpty) parts.add('Size: $size');
+    if (color != null && color.toString().isNotEmpty) parts.add('Color: $color');
+    return parts.join(' • ');
   }
-
-  String _titleCase(String s) =>
-      s.split(' ').map((w) => w.isEmpty ? w : w[0].toUpperCase() + w.substring(1)).join(' ');
 
   @override
   void onClose() {
@@ -478,6 +215,7 @@ Future<void> removeCoupon(String code) async {
     super.onClose();
   }
 }
+
 
 
 

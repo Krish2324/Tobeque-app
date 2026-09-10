@@ -14,6 +14,6 @@ class AppDI {
       receiveTimeout: const Duration(seconds: 20),
       headers: {'Accept': 'application/json'},
     ));
-    wp = WPService(dio);
+    wp = WPService(); // No-arg constructor after migration to new backend
   }
 }

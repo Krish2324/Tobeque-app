@@ -1,4 +1,6 @@
 import 'dart:math' as math;
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:shimmer/shimmer.dart';
 import 'package:tobeque/view/home/widgets/footer_section.dart';
 import 'package:tobeque/view/home/widgets/promo_banner.dart';
 import 'package:tobeque/view/wishlist/wish_button.dart';
@@ -24,7 +26,10 @@ class HomePageView extends StatelessWidget {
 
     return Obx(() {
       if (c.loading.value) {
-        return const Scaffold(body: Center(child: CircularProgressIndicator(color: Colors.black)));
+        return const Scaffold(
+          backgroundColor: Colors.white,
+          body: _HomeSkeletonLoader(),
+        );
       }
       if (c.error.value != null) {
         // ⬇️ Error page with pull-to-refresh AND a retry button
@@ -114,109 +119,87 @@ class HomePageView extends StatelessWidget {
 //     ),
 //   ),
 // ),
-
-
-// === Category posters (HORIZONTAL, large, shows ALL) ===
+// ═══════════════════════════════════════════════════════════
+// SECTION 1 — SHOP BY CATEGORY  (2-column portrait grid)
+// ═══════════════════════════════════════════════════════════
 SliverToBoxAdapter(
-  child: SizedBox(
-    height: 225, // tweak for bigger/smaller posters
-    child: ListView.separated(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 0),
-      itemCount: c.cats.length,
-      separatorBuilder: (_, __) => const SizedBox(width: 1),
-      itemBuilder: (_, i) {
-        final cat = c.cats[i];
-        return SizedBox(
-          width: 165, // big width; adjust to taste
-          child: Padding(
-            padding: const EdgeInsets.only(top: 4,right: 4),
-            child: _CategoryPosterCard(
-              title: cat.name,
-              imageUrl: cat.image,
-              onTap: () => Get.to(() =>
-                CategoryPage(categoryId: cat.id, title: cat.name)),
-            ),
-          ),
-        );
-      },
-    ),
-  ),
-)
-,
-SliverToBoxAdapter(
-  child: Padding(
-    padding: const EdgeInsets.only(top: 4),
-    child: PromoBanner(
-    assetPath: 'assets/girl2.png',
-    title: 'jackets and\ncoats',
-    onTap: () {
-      // navigate to your Jackets/Coats category
-      // e.g. Get.to(() => CategoryPage(...));
-    },
-    ),
-  ),
-),
-
-
-// === GET THE LOOK heading ===
-SliverToBoxAdapter(
-  child: Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-         // textBaseline: TextBaseline.alphabetic,
-          children: const [
-            Padding(
-              padding: EdgeInsets.only(bottom: 3),
-              child: Icon(Icons.arrow_forward,size: 25,weight: 25,),
-            ),
-            SizedBox(width: 5),
-            Text(
-              'Something you’ll love!',
-
-              style: TextStyle(
-                fontSize: 25,
-                fontWeight: FontWeight.w500,
-                letterSpacing: 1.0,
-                   overflow: TextOverflow.ellipsis,
-              ),
+  child: Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      // Section heading
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 28, 16, 14),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('SHOP BY', style: TextStyle(fontSize: 11, letterSpacing: 3, color: Colors.black45, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 2),
+                Text('Category', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
+              ],
             ),
           ],
         ),
-        const SizedBox(height: 6),
-   
-      ],
-    ),
+      ),
+      // 2-column category grid
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: _CategoryGrid(cats: c.cats),
+      ),
+      const SizedBox(height: 32),
+    ],
   ),
-)
-,
+),
 
-// --- “Get the look” grid (2×2, only 4 items, no price) ---
+// ═══════════════════════════════════════════════════════════
+// SECTION 2 — NEW ARRIVALS heading + horizontal product scroll
+// ═══════════════════════════════════════════════════════════
+SliverToBoxAdapter(
+  child: Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      // Divider
+      Container(height: 1, color: const Color(0xFFF0F0F0)),
+      const SizedBox(height: 28),
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('TRENDING NOW', style: TextStyle(fontSize: 11, letterSpacing: 3, color: Colors.black45, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 2),
+                Text('New Arrivals', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
+              ],
+            ),
+            GestureDetector(
+              onTap: () {/* Navigate to all products */},
+              child: Text('View all', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.black54, decoration: TextDecoration.underline)),
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 16),
+    ],
+  ),
+),
 SliverToBoxAdapter(
   child: _InterestSection(products: c.best),
 ),
 
-
+// ═══════════════════════════════════════════════════════════
+// SECTION 3 — Editorial dark CTA banner
+// ═══════════════════════════════════════════════════════════
 SliverToBoxAdapter(
-  child: Padding(
-    padding: const EdgeInsets.only(top: 0),
-    child: PromoBanner(
-    assetPath: 'assets/girl3.png',
-    title: 'Jeans and\ntop',
-    onTap: () {
-      // navigate to your Jackets/Coats category
-      // e.g. Get.to(() => CategoryPage(...));
-    },
-    ),
-  ),
+  child: _EditorialBanner(),
 ),
 
-
- SliverToBoxAdapter(child:  StoreFooterTobeque(
+ SliverToBoxAdapter(child: StoreFooterTobeque(
   onSubscribe: () { /* open subscribe flow */ },
   onCall: () { /* launch phone */ },
   onChat: () { /* open chat */ },
@@ -230,6 +213,205 @@ SliverToBoxAdapter(
         ),
       );
     });
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   CATEGORY GRID  — 2-column tall portrait cards
+   ═══════════════════════════════════════════════════════════════ */
+
+class _CategoryGrid extends StatelessWidget {
+  const _CategoryGrid({required this.cats});
+  final List<WcCategory> cats;
+
+  @override
+  Widget build(BuildContext context) {
+    if (cats.isEmpty) return const SizedBox.shrink();
+    // Show in pairs (2 columns)
+    final rows = (cats.length / 2).ceil();
+    return Column(
+      children: List.generate(rows, (row) {
+        final leftIdx  = row * 2;
+        final rightIdx = row * 2 + 1;
+        final leftCat  = cats[leftIdx];
+        final rightCat = rightIdx < cats.length ? cats[rightIdx] : null;
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: Row(
+            children: [
+              Expanded(child: _CategoryCard(cat: leftCat)),
+              const SizedBox(width: 10),
+              Expanded(
+                child: rightCat != null
+                    ? _CategoryCard(cat: rightCat)
+                    : const SizedBox.shrink(),
+              ),
+            ],
+          ),
+        );
+      }),
+    );
+  }
+}
+
+class _CategoryCard extends StatelessWidget {
+  const _CategoryCard({required this.cat});
+  final WcCategory cat;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => Get.to(() => CategoryPage(categoryId: cat.id, title: cat.name)),
+      child: AspectRatio(
+        aspectRatio: 3 / 4,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              // Background image
+              if (cat.image != null && cat.image!.isNotEmpty)
+                CachedNetworkImage(
+                  imageUrl: cat.image!,
+                  fit: BoxFit.cover,
+                  width: double.infinity,
+                  height: double.infinity,
+                  placeholder: (_, __) => _ShimmerBox(),
+                  errorWidget: (_, __, ___) => Container(color: const Color(0xFFEEEEEE)),
+                )
+              else
+                Container(color: const Color(0xFFF0F0F0)),
+
+              // Gradient overlay (bottom-heavy for text legibility)
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.transparent,
+                      Colors.black.withOpacity(0.18),
+                      Colors.black.withOpacity(0.72),
+                    ],
+                    stops: const [0.4, 0.72, 1.0],
+                  ),
+                ),
+              ),
+
+              // Category label at bottom
+              Positioned(
+                left: 0, right: 0, bottom: 0,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        cat.name.toUpperCase(),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 1.1,
+                          height: 1.2,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                        child: const Text(
+                          'SHOP',
+                          style: TextStyle(
+                            color: Colors.black,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 1.5,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   EDITORIAL BANNER  — dark full-width CTA
+   ═══════════════════════════════════════════════════════════════ */
+
+class _EditorialBanner extends StatelessWidget {
+  const _EditorialBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    final w = MediaQuery.of(context).size.width;
+    return Container(
+      width: w,
+      margin: const EdgeInsets.symmetric(vertical: 28, horizontal: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1A1A),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      padding: const EdgeInsets.fromLTRB(28, 36, 28, 36),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'EXCLUSIVELY\nCURATED FOR YOU',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 26,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.5,
+              height: 1.2,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Container(width: 40, height: 2, color: Colors.white30),
+          const SizedBox(height: 16),
+          const Text(
+            'Discover the latest in women\'s fashion. New arrivals every week.',
+            style: TextStyle(
+              color: Colors.white60,
+              fontSize: 13.5,
+              height: 1.5,
+            ),
+          ),
+          const SizedBox(height: 24),
+          GestureDetector(
+            onTap: () {/* Navigate to all products */},
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 13),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(2),
+              ),
+              child: const Text(
+                'SHOP NOW',
+                style: TextStyle(
+                  color: Colors.black,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 12,
+                  letterSpacing: 2.0,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -250,7 +432,9 @@ class _HeroMedia extends StatefulWidget {
 
 class _HeroMediaState extends State<_HeroMedia> {
   bool _minHoldElapsed = false; // short hold to avoid flicker
-  bool _precacheDone = false;// short hold to avoid flicker
+  bool _precacheDone = false; // short hold to avoid flicker
+  final PageController _pageController = PageController();
+  int _currentPage = 0;
 
  @override
   void initState() {
@@ -276,6 +460,12 @@ class _HeroMediaState extends State<_HeroMedia> {
     }
   }
 
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -314,23 +504,75 @@ class _HeroMediaState extends State<_HeroMedia> {
     Widget placeholder() => Image.asset(
           'assets/home.png',
           fit: BoxFit.fitHeight,
-          
           errorBuilder: (_, __, ___) => const SizedBox.shrink(),
         );
 
     Widget fallbackImage() {
-      final img = widget.imageFallback ?? '';
-      if (img.isEmpty) return placeholder();
+      final banners = widget.controller.heroData.value?.mobileBanners ?? [];
+      
+      if (banners.isEmpty) {
+        final img = widget.imageFallback ?? '';
+        if (img.isEmpty) return placeholder();
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            placeholder(),
+            Image.network(
+              img,
+              fit: BoxFit.fill,
+              loadingBuilder: (c, child, p) => p == null ? child : const SizedBox.shrink(),
+              errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+            ),
+          ],
+        );
+      }
+
       return Stack(
         fit: StackFit.expand,
         children: [
-          placeholder(), // show asset first
-          Image.network(
-            img,
-            fit: BoxFit.fill,
-            loadingBuilder: (c, child, p) => p == null ? child : const SizedBox.shrink(),
-            errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+          PageView.builder(
+            controller: _pageController,
+            onPageChanged: (idx) {
+              setState(() {
+                _currentPage = idx;
+              });
+            },
+            itemCount: banners.length,
+            itemBuilder: (context, index) {
+              return Stack(
+                fit: StackFit.expand,
+                children: [
+                  placeholder(),
+                  Image.network(
+                    banners[index],
+                    fit: BoxFit.fill,
+                    loadingBuilder: (c, child, p) => p == null ? child : const SizedBox.shrink(),
+                    errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                  ),
+                ],
+              );
+            },
           ),
+          if (banners.length > 1)
+            Positioned(
+              bottom: 24,
+              left: 0,
+              right: 0,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(banners.length, (index) {
+                  return Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    width: _currentPage == index ? 24 : 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: _currentPage == index ? Colors.white : Colors.white54,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  );
+                }),
+              ),
+            ),
         ],
       );
     }
@@ -482,7 +724,6 @@ class _CategoryPosterCard extends StatelessWidget {
 }
 
 
-
 class _InterestSection extends StatelessWidget {
   const _InterestSection({required this.products});
   final List<WcProduct> products;
@@ -491,18 +732,19 @@ class _InterestSection extends StatelessWidget {
   Widget build(BuildContext context) {
     if (products.isEmpty) return const SizedBox.shrink();
     final screenW = MediaQuery.of(context).size.width;
+    final cardW   = screenW * 0.46;
 
     return SizedBox(
-      height: 380,
+      height: cardW * (4 / 3) + 72, // portrait image + label area
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
         physics: const BouncingScrollPhysics(),
         itemBuilder: (_, i) => SizedBox(
-          width: screenW / 2,
+          width: cardW,
           child: _ProductCard(p: products[i]),
         ),
-        separatorBuilder: (_, __) => const SizedBox(width: 4),
+        separatorBuilder: (_, __) => const SizedBox(width: 10),
         itemCount: products.length,
       ),
     );
@@ -522,24 +764,22 @@ class _ProductCard extends StatelessWidget {
     return out;
   }
 
-  String _trimZeroCents(String s) => s.replaceAll(RegExp(r'([.,])00\b'), '');
-
   String _priceFor(WcProduct p) {
     final html = p.priceHtml;
     if (html == null || html.isEmpty) return '';
     final stripped = html.replaceAll(RegExp(r'<[^>]*>'), '');
     var decoded = _decodeEntities(stripped).trim();
     decoded = decoded.replaceFirstMapped(RegExp(r'^([^\d\s]+)(\d)'), (m) => '${m[1]} ${m[2]}');
-    return _trimZeroCents(decoded);
+    return decoded.replaceAll(RegExp(r'([.,])00\b'), '');
   }
 
   @override
   Widget build(BuildContext context) {
-    final name = _decodeEntities(p.name).trim();
-    final img  = (p.image ?? '').trim();
+    final name  = _decodeEntities(p.name).trim();
+    final img   = (p.image ?? '').trim();
     final price = _priceFor(p);
 
-    return InkWell(
+    return GestureDetector(
       onTap: () => Get.to(
         () => ProductDetailPage(key: ValueKey(p.id), productId: p.id),
         binding: ProductDetailBinding(p.id),
@@ -547,87 +787,205 @@ class _ProductCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // IMAGE + OVERLAYED HEART (Positioned inside Stack ✅)
+          // ── PORTRAIT IMAGE ──────────────────────────────────
           Expanded(
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(0),
-              child: AspectRatio(
-                aspectRatio: 2 / 1.1,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    if (img.isNotEmpty)
-                      Image.network(
-                        img,
-                        fit: BoxFit.cover,
-                        loadingBuilder: (c, child, p) =>
-                            p == null ? child : const ColoredBox(color: Color(0xFFEDEDED)),
-                        errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFF2F2F2)),
-                      )
-                    else
-                      const ColoredBox(color: Color(0xFFF2F2F2)),
+              borderRadius: BorderRadius.circular(4),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  if (img.isNotEmpty)
+                    CachedNetworkImage(
+                      imageUrl: img,
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      height: double.infinity,
+                      placeholder: (_, __) => _ShimmerBox(),
+                      errorWidget: (_, __, ___) => Container(
+                        color: const Color(0xFFF0F0F0),
+                        child: const Icon(Icons.image_not_supported_outlined,
+                            color: Colors.black26, size: 32),
+                      ),
+                    )
+                  else
+                    _ShimmerBox(),
 
-                    // bottom-right (or change to left) heart
-                   
-                  ],
-                ),
+                  // Wishlist heart (top-right)
+                  Positioned(
+                    top: 8, right: 8,
+                    child: WishButton.fromProduct(
+                      p,
+                      size: 20,
+                      activeColor: Colors.redAccent,
+                      inactiveColor: Colors.black54,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
-      
 
-// Title + price (left)  •  Heart (right)
-Row(
-  crossAxisAlignment: CrossAxisAlignment.center,
-  children: [
-    // LEFT: name + price
-    Expanded(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // name
+          // ── NAME + PRICE ─────────────────────────────────────
+          const SizedBox(height: 8),
           Text(
-            name, // make sure you pass a decoded name
+            name,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12.7),
+            style: const TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.1,
+            ),
           ),
-          // price
           if (price.isNotEmpty) ...[
-            const SizedBox(height: 2),
+            const SizedBox(height: 3),
             Text(
               price,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12.7),
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w900,
+              ),
             ),
           ],
-        ],
-      ),
-    ),
-
-    const SizedBox(width: 8),
-
-    // RIGHT: heart (wishlist)
-    Padding(
-      padding: const EdgeInsets.only(right:4.0,bottom: 10),
-      child: SizedBox(
-            
-        child: WishButton.fromProduct(
-          p,
-          size: 22,                       // adjust if you want bigger/smaller
-          activeColor: Colors.redAccent,  // filled heart color
-          inactiveColor: Colors.black54,  // outline color
-        ),
-      ),
-    ),
-  ],
-),
-SizedBox(
-  height: 8,
-)
+          const SizedBox(height: 8),
         ],
       ),
     );
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   SHIMMER BOX — reusable shimmer placeholder
+   ═══════════════════════════════════════════════════════════════ */
+
+class _ShimmerBox extends StatelessWidget {
+  const _ShimmerBox({this.width, this.height, this.borderRadius = 4});
+  final double? width;
+  final double? height;
+  final double borderRadius;
+
+  @override
+  Widget build(BuildContext context) {
+    return Shimmer.fromColors(
+      baseColor: const Color(0xFFEEEEEE),
+      highlightColor: const Color(0xFFFAFAFA),
+      child: Container(
+        width: width ?? double.infinity,
+        height: height ?? double.infinity,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(borderRadius),
+        ),
+      ),
+    );
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   HOME SKELETON LOADER — full page shimmer
+   ═══════════════════════════════════════════════════════════════ */
+
+class _HomeSkeletonLoader extends StatelessWidget {
+  const _HomeSkeletonLoader();
+
+  @override
+  Widget build(BuildContext context) {
+    final w = MediaQuery.of(context).size.width;
+    final h = MediaQuery.of(context).size.height;
+
+    return SingleChildScrollView(
+      physics: const NeverScrollableScrollPhysics(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Hero skeleton
+          _ShimmerBox(width: w, height: h * 0.68, borderRadius: 0),
+
+          const SizedBox(height: 28),
+
+          // Section title skeleton
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _ShimmerBox(width: 70, height: 11, borderRadius: 4),
+                const SizedBox(height: 6),
+                _ShimmerBox(width: 140, height: 28, borderRadius: 4),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // Category grid skeleton  (2 tall portrait cards)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Row(
+              children: [
+                Expanded(child: AspectRatio(aspectRatio: 3/4, child: _ShimmerBox(borderRadius: 4))),
+                const SizedBox(width: 10),
+                Expanded(child: AspectRatio(aspectRatio: 3/4, child: _ShimmerBox(borderRadius: 4))),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 32),
+
+          // Products heading skeleton
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _ShimmerBox(width: 100, height: 11, borderRadius: 4),
+                const SizedBox(height: 6),
+                _ShimmerBox(width: 160, height: 28, borderRadius: 4),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // Horizontal product cards skeleton
+          SizedBox(
+            height: (w * 0.46) * (4/3) + 72,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              itemCount: 4,
+              separatorBuilder: (_, __) => const SizedBox(width: 10),
+              itemBuilder: (_, __) {
+                final cardW = w * 0.46;
+                return SizedBox(
+                  width: cardW,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: _ShimmerBox(borderRadius: 4)),
+                      const SizedBox(height: 8),
+                      _ShimmerBox(width: cardW * 0.7, height: 13, borderRadius: 4),
+                      const SizedBox(height: 5),
+                      _ShimmerBox(width: cardW * 0.4, height: 13, borderRadius: 4),
+                      const SizedBox(height: 8),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+
+          const SizedBox(height: 28),
+
+          // Editorial banner skeleton
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: _ShimmerBox(width: w, height: 180, borderRadius: 6),
+          ),
+
+          const SizedBox(height: 40),
+        ],
+      ),
+    );
+  }
+}

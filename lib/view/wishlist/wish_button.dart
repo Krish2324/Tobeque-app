@@ -27,7 +27,7 @@ class WishButton extends StatelessWidget {
   }) : product = null;
 
   final WcProduct? product;
-  final int? id;
+  final String? id;  // MongoDB _id string
   final String? name;
   final String? priceHtml;
   final String? image;
@@ -41,9 +41,8 @@ class WishButton extends StatelessWidget {
     final svc = Get.find<WishlistService>();
 
     // SAFELY derive fields with null-aware access
-    final int? pid = id ?? product?.id;
-    if (pid == null || pid <= 0) {
-      // nothing to render if we don't have a valid id
+    final String? pid = id ?? product?.id;
+    if (pid == null || pid.isEmpty) {
       return const SizedBox.shrink();
     }
 

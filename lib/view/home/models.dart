@@ -3,19 +3,20 @@ import 'package:tobeque/utills/html_decode.dart';
 
 class WpPageHero {
   final String? imageUrl;
-  WpPageHero({this.imageUrl});
+  List<String> mobileBanners;
+  WpPageHero({this.imageUrl, this.mobileBanners = const []});
 }
 
 class WcCategory {
-  final int id;
+  final String id;   // MongoDB _id string
   final String name;
   late final String? image;
   WcCategory({required this.id, required this.name, this.image});
 }
 
 class WcProduct {
-  final int id;
-  final String name;        // keep original
+  final String id;   // MongoDB _id string
+  final String name;
   final String? priceHtml;
   final String? image;
 

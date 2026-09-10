@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 
 
+import 'package:tobeque/constants/api_constants.dart';
 import 'package:tobeque/data/network/network_api_sarvices.dart';
 import 'package:tobeque/view/prodduct_details/product_api_repo.dart';
 
@@ -47,9 +48,14 @@ List<Map<String, dynamic>> get popularNotInCart {
 Future<void> fetchPopular() async {
   try {
     final res = await api.net.getApi(
-      'https://tobeque.com/wp-json/wc/store/v1/products?per_page=12&orderby=popularity',
+      '${ApiConstant.products}?status=published&limit=12',
     );
-    final list = (res as List?) ?? const [];
+    List list = [];
+    if (res is Map && res['products'] is List) {
+      list = res['products'];
+    } else if (res is List) {
+      list = res;
+    }
     popular.assignAll(
       list.whereType<Map>().map((m) => m.cast<String, dynamic>()),
     );

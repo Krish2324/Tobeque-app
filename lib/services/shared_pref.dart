@@ -45,6 +45,11 @@ class SharedPrefService {
     return prefs.getString("auth_token");
   }
 
+  static Future<void> removeToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove("auth_token");
+  }
+
   static Future<void> clear() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();

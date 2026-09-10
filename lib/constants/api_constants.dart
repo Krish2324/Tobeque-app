@@ -1,20 +1,35 @@
 class ApiConstant {
+  static const String baseUrl = 'https://backend.tobeque.com';
+  static const String apiBase = '$baseUrl/api';
 
-  
-  static const String baseUrl = 'https://tobeque.com';
-  static const String restPrefix = 'wp-json';
+  // Auth endpoints
+  static const String login = '$apiBase/user-auth/login';
+  static const String register = '$apiBase/user-auth/register';
+  static const String sendOtp = '$apiBase/user-auth/send-otp';
+  static const String verifyOtp = '$apiBase/user-auth/verify-otp';
+  static const String userProfile = '$apiBase/user-auth/profile';
+  static const String userOrders = '$apiBase/user-auth/orders';
 
-  // WordPress Core REST
-  static String wp(String path) => '$baseUrl/$restPrefix/wp/v2/$path';
+  // Products & Categories
+  static const String products = '$apiBase/products';
+  static const String categories = '$apiBase/categories/public';
+  static const String banners = '$apiBase/banners';
+  static const String seasonCollection = '$apiBase/season-collection';
 
-  // WooCommerce Store API (no auth for public catalog)
-  static String wcStore(String path) => '$baseUrl/$restPrefix/wc/store/v1/$path';
+  // Coupons & Shipping
+  static const String validateCoupon = '$apiBase/coupons/validate';
+  static const String calculateShipping = '$apiBase/shipping/calculate';
 
-  // WooCommerce REST v3 (requires keys; for admin-like ops)
-  static String wcV3(String path) => '$baseUrl/$restPrefix/wc/v3/$path';
+  // Orders & Payment
+  static const String placeOrder = '$apiBase/user-auth/orders';
+  static const String razorpayCreateOrder = '$apiBase/user-auth/razorpay/create-order';
+  static const String razorpayVerify = '$apiBase/user-auth/razorpay/verify';
 
-  // If you need CK/CS (server should be HTTPS)
-  static const consumerKey = 'ck_f826ac5930933a42627eb47f74a0cec91d938f5b';
-  static const consumerSecret = 'cs_0a8e1e294651634cc544f488d94f62c7bd87abab';
+  // Image Helper
+  static String getImageUrl(String? path) {
+    if (path == null || path.isEmpty) return '';
+    if (path.startsWith('http://') || path.startsWith('https://')) return path;
+    if (path.startsWith('/')) return '$baseUrl$path';
+    return '$baseUrl/$path';
+  }
 }
-
