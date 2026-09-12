@@ -9,28 +9,32 @@ import '../models.dart';
 enum MediaKind { youtube, directFile, unknown }
 
 class HomeController extends GetxController {
-
-
-
-  
   final repo = HomeRepository();
 
-  // state
+  // ── Existing state ─────────────────────────────────────────────────────────
   final loading = true.obs;
   final error = RxnString();
 
-  final heroData = Rxn<WpPageHero>();
-  final cats = <WcCategory>[].obs;
-  final best = <WcProduct>[].obs;
-
+  final heroData     = Rxn<WpPageHero>();
+  final cats         = <WcCategory>[].obs;
+  final best         = <WcProduct>[].obs;
+  final visibleFeaturedCount = 6.obs;
   final heroVideoUrl = RxnString();
   final showYTPlaceholder = true.obs;
+
+  void loadMoreFeatured() {
+    visibleFeaturedCount.value += 6;
+  }
+
+  // ── NEW state ──────────────────────────────────────────────────────────────
+  final onSale       = <WcProduct>[].obs;   // On Sale slider
+  final hotRightNow  = <WcProduct>[].obs;   // Hot Right Now cards
+  final bottomBanner = Rxn<Map<String, dynamic>>(); // Promo bottom banner
 
   // media controllers
   VideoPlayerController? videoCtl;
   ChewieController? chewieCtl;
   YoutubePlayerController? ytCtl;
-
 
   @override
   void onInit() {
@@ -38,25 +42,26 @@ class HomeController extends GetxController {
     _load();
   }
 
-@override
-void onClose() {
-  chewieCtl?.dispose();
-  videoCtl?.dispose();
-  ytCtl?.close(); // 👈 dispose IFrame controller too
-  super.onClose();
-}
+  @override
+  void onClose() {
+    chewieCtl?.dispose();
+    videoCtl?.dispose();
+    ytCtl?.close();
+    super.onClose();
+  }
 
-Future<void> refreshHome() async {
+  Future<void> refreshHome() async {
     try {
       error.value = null;
       loading.value = true;
-      await _load();            // or fetchAll()
+      await _load();
     } catch (e) {
       error.value = e.toString();
     } finally {
       loading.value = false;
     }
   }
+
   Future<void> _load() async {
     try {
       final results = await Future.wait<dynamic>([
@@ -64,19 +69,23 @@ Future<void> refreshHome() async {
         repo.fetchCategories(perPage: 15),
         repo.fetchBestSellers(perPage: 50),
         repo.fetchHeroVideoUrl(),
+        repo.fetchOnSaleProducts(perPage: 15),
+        repo.fetchHotRightNow(perPage: 10),
+        repo.fetchBottomBanner(),
       ]);
 
       heroData.value = results[0] as WpPageHero?;
       cats.assignAll(results[1] as List<WcCategory>);
       best.assignAll(results[2] as List<WcProduct>);
-      
+
+      // Handle hero video URL (extract from mobile banners if embedded)
       String? vUrl;
       final hero = heroData.value;
       if (hero != null && hero.mobileBanners.isNotEmpty) {
         final modifiableBanners = List<String>.from(hero.mobileBanners);
-        final videoUrls = modifiableBanners.where((url) => 
-            url.toLowerCase().endsWith('.mp4') || 
-            url.toLowerCase().endsWith('.webm') || 
+        final videoUrls = modifiableBanners.where((url) =>
+            url.toLowerCase().endsWith('.mp4') ||
+            url.toLowerCase().endsWith('.webm') ||
             url.toLowerCase().contains('.m3u8')).toList();
         if (videoUrls.isNotEmpty) {
           vUrl = videoUrls.first;
@@ -85,7 +94,12 @@ Future<void> refreshHome() async {
         }
       }
       heroVideoUrl.value = vUrl ?? results[3] as String?;
-      
+
+      // New sections
+      onSale.assignAll(results[4] as List<WcProduct>);
+      hotRightNow.assignAll(results[5] as List<WcProduct>);
+      bottomBanner.value = results[6] as Map<String, dynamic>?;
+
       await _prepareHeroMedia();
     } catch (e) {
       error.value = e.toString();
@@ -93,6 +107,7 @@ Future<void> refreshHome() async {
       loading.value = false;
     }
   }
+
 
  MediaKind detectUrlKind(String url) {
   final u = url.toLowerCase();

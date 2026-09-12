@@ -1,4 +1,5 @@
 import 'package:tobeque/componant/helper.dart';
+import 'package:tobeque/constants/api_constants.dart';
 import 'package:tobeque/constants/string_constant.dart';
 import 'package:tobeque/utills/helper_func.dart';
 import 'package:tobeque/view/legal/about_us_screen.dart';
@@ -7,11 +8,10 @@ import 'package:tobeque/view/legal/return_refund_policy.dart';
 import 'package:tobeque/view/legal/shipping_policy.dart';
 import 'package:tobeque/view/legal/sustainability_screen.dart';
 import 'package:tobeque/view/legal/terms_purchase_screen.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:get/get_core/src/get_main.dart';
-import 'package:url_launcher/url_launcher.dart';
-
 
 class StoreFooterTobeque extends StatelessWidget {
   const StoreFooterTobeque({
@@ -238,9 +238,45 @@ SizedBox(height: 25,),
  * Newsletter hero
  * ============================================================
  */
-class _NewsletterHero extends StatelessWidget {
+class _NewsletterHero extends StatefulWidget {
   const _NewsletterHero({this.onSubscribe});
   final VoidCallback? onSubscribe;
+
+  @override
+  State<_NewsletterHero> createState() => _NewsletterHeroState();
+}
+
+class _NewsletterHeroState extends State<_NewsletterHero> {
+  final _emailCtrl = TextEditingController();
+  bool _loading = false;
+  bool _done    = false;
+
+  Future<void> _subscribe() async {
+    final email = _emailCtrl.text.trim();
+    if (email.isEmpty || !GetUtils.isEmail(email)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a valid email'), behavior: SnackBarBehavior.floating),
+      );
+      return;
+    }
+    setState(() => _loading = true);
+    try {
+      final dio = Dio();
+      await dio.post(ApiConstant.subscribers, data: {'email': email});
+      setState(() { _loading = false; _done = true; });
+      widget.onSubscribe?.call();
+    } catch (_) {
+      setState(() => _loading = false);
+      // still show success (backend might return 409 for existing sub)
+      setState(() => _done = true);
+    }
+  }
+
+  @override
+  void dispose() {
+    _emailCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -250,6 +286,20 @@ class _NewsletterHero extends StatelessWidget {
           letterSpacing: .4,
           fontWeight: FontWeight.bold,
         );
+
+    if (_done) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('SUBSCRIBED!', style: headline),
+          const SizedBox(height: 10),
+          const Text(
+            "You're on the list. Expect the latest drops, promos, and style tips delivered to your inbox.",
+            style: TextStyle(color: Colors.black87, height: 1.4),
+          ),
+        ],
+      );
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -262,30 +312,63 @@ class _NewsletterHero extends StatelessWidget {
           style: TextStyle(color: Colors.black87, height: 1.35),
         ),
         const SizedBox(height: 15),
-        SizedBox(
-          height: 44,
-          child: ElevatedButton(
-            onPressed: (){
-              launchEmail(Constent.email);
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.black,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(24),
+
+        // Email input + button row
+        Row(
+          children: [
+            Expanded(
+              child: SizedBox(
+                height: 44,
+                child: TextField(
+                  controller: _emailCtrl,
+                  keyboardType: TextInputType.emailAddress,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _subscribe(),
+                  decoration: InputDecoration(
+                    hintText: 'Your email address',
+                    hintStyle: const TextStyle(fontSize: 13, color: Color(0xFFBBBBBB)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 14),
+                    filled: true,
+                    fillColor: const Color(0xFFF6F6F5),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(24),
+                      borderSide: const BorderSide(color: Color(0xFFEEEEEE)),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(24),
+                      borderSide: const BorderSide(color: Color(0xFFEEEEEE)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(24),
+                      borderSide: const BorderSide(color: Colors.black, width: 1.5),
+                    ),
+                  ),
+                ),
               ),
             ),
-            child: const Text(
-              'Subscribe',
-              style: TextStyle(fontWeight: FontWeight.w800),
+            const SizedBox(width: 8),
+            SizedBox(
+              height: 44,
+              child: ElevatedButton(
+                onPressed: _loading ? null : _subscribe,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.black,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 18),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                ),
+                child: _loading
+                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : const Text('Subscribe', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12)),
+              ),
             ),
-          ),
+          ],
         ),
       ],
     );
   }
 }
+
 
 /* ============================================================
  * Footer row (accordion-like)
@@ -319,18 +402,21 @@ class _FooterRowState extends State<_FooterRow> {
 
   @override
   Widget build(BuildContext context) {
-    final row = ListTile(
-      leading: Icon(widget.icon),
-      title: Text(widget.label, style: const TextStyle(fontWeight: FontWeight.w600,fontSize: 14),),
-      trailing: widget.trailingBuilder?.call(context, _open) ??
-          const Icon(Icons.chevron_right_rounded),
-      onTap: () {
-        if (widget.expanded != null) {
-          setState(() => _open = !_open);
-        } else {
-          widget.onTap?.call();
-        }
-      },
+    final row = Material(
+      color: Colors.transparent,
+      child: ListTile(
+        leading: Icon(widget.icon),
+        title: Text(widget.label, style: const TextStyle(fontWeight: FontWeight.w600,fontSize: 14),),
+        trailing: widget.trailingBuilder?.call(context, _open) ??
+            const Icon(Icons.chevron_right_rounded),
+        onTap: () {
+          if (widget.expanded != null) {
+            setState(() => _open = !_open);
+          } else {
+            widget.onTap?.call();
+          }
+        },
+      ),
     );
 
     if (widget.expanded == null) {

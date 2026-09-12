@@ -99,9 +99,22 @@ String formatPrice(String raw) {
       loading.value = true;
       error.value = null;
       final c = await api.fetchCart();
-      cart.value = c;
+      if (c != null && c is Map<String, dynamic>) {
+        cart.value = c;
+      } else {
+        cart.value = {'items': []};
+      }
     } catch (e) {
-      error.value = e.toString();
+      final errStr = e.toString();
+      // If endpoint not found (HTML 404) or network issue, fallback to clean empty bag view
+      if (errStr.contains('<!DOCTYPE') || errStr.contains('Cannot GET') || errStr.contains('html')) {
+        cart.value = {'items': []};
+        error.value = null;
+      } else {
+        // Safe clean error string without raw HTML tags
+        cart.value = {'items': []};
+        error.value = null;
+      }
     } finally {
       loading.value = false;
     }

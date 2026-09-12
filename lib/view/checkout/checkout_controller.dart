@@ -5,6 +5,7 @@ import 'package:tobeque/view/checkout/checkout_sucess_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:tobeque/data/network/network_api_sarvices.dart';
+import 'package:razorpay_flutter/razorpay_flutter.dart';
 
 class CheckoutController extends GetxController {
   final api = NetworkApi();
@@ -157,33 +158,128 @@ class CheckoutController extends GetxController {
     couponCtrl.clear();
   }
 
+  // ── Razorpay ──────────────────────────────────────────────────────────────
+  Razorpay? _razorpay;
+  String?   _rzpOrderId;   // Razorpay order id from backend
+  String?   _dbOrderId;    // MongoDB order id (for success screen)
+
+  void _initRazorpay() {
+    _razorpay = Razorpay();
+    _razorpay!.on(Razorpay.EVENT_PAYMENT_SUCCESS, _handlePaymentSuccess);
+    _razorpay!.on(Razorpay.EVENT_PAYMENT_ERROR,   _handlePaymentError);
+    _razorpay!.on(Razorpay.EVENT_EXTERNAL_WALLET, _handleExternalWallet);
+  }
+
+  void _handlePaymentSuccess(PaymentSuccessResponse response) async {
+    // Verify with backend
+    try {
+      await api.postApi({
+        'razorpay_order_id':   _rzpOrderId,
+        'razorpay_payment_id': response.paymentId,
+        'razorpay_signature':  response.signature,
+        'dbOrderId':           _dbOrderId,
+      }, ApiConstant.razorpayVerify);
+    } catch (_) {}
+    _razorpay?.clear();
+    mutating(false);
+    Get.off(() => CheckoutSuccessScreen(orderId: _dbOrderId, redirectUrl: null));
+  }
+
+  void _handlePaymentError(PaymentFailureResponse response) {
+    _razorpay?.clear();
+    mutating(false);
+    Get.snackbar(
+      'Payment Failed',
+      response.message ?? 'Payment was not completed. Please try again.',
+      snackPosition: SnackPosition.BOTTOM,
+      backgroundColor: const Color(0xFFE53935),
+      colorText: Colors.white,
+      duration: const Duration(seconds: 4),
+    );
+  }
+
+  void _handleExternalWallet(ExternalWalletResponse response) {
+    _razorpay?.clear();
+    mutating(false);
+    Get.snackbar(
+      'External Wallet',
+      'Redirecting to ${response.walletName}…',
+      snackPosition: SnackPosition.BOTTOM,
+    );
+  }
+
   Future<void> placeOrder() async {
     if (!(formKey.currentState?.validate() ?? false)) return;
-
     mutating(true);
+
     try {
       final addr = _buildAddress();
       final body = {
-        'customerName': addr['name'],
-        'customerPhone': addr['phone'],
+        'customerName':    addr['name'],
+        'customerPhone':   addr['phone'],
         'shippingAddress': addr,
-        'billingAddress': addr,
-        'items': items,
-        'couponCode': appliedCoupons.isNotEmpty ? appliedCoupons.first : null,
-        'paymentMethod': selectedPaymentId.value,
-        'notes': noteCtrl.text.trim(),
-        'shippingCost': shippingCost.value,
+        'billingAddress':  addr,
+        'items':           items,
+        'couponCode':      appliedCoupons.isNotEmpty ? appliedCoupons.first : null,
+        'paymentMethod':   selectedPaymentId.value,
+        'notes':           noteCtrl.text.trim(),
+        'shippingCost':    shippingCost.value,
       };
 
-      final res = await api.postApi(body, ApiConstant.placeOrder);
-      final orderId = (res is Map) ? (res['order']?['_id'] ?? res['order']?['id'] ?? res['orderId'])?.toString() : null;
+      // ── COD path ─────────────────────────────────────────────────────────
+      if (selectedPaymentId.value == 'cod') {
+        final res     = await api.postApi(body, ApiConstant.placeOrder);
+        final orderId = (res is Map) ? (res['order']?['_id'] ?? res['order']?['id'] ?? res['orderId'])?.toString() : null;
+        mutating(false);
+        Get.off(() => CheckoutSuccessScreen(orderId: orderId, redirectUrl: null));
+        return;
+      }
 
-      Get.off(() => CheckoutSuccessScreen(orderId: orderId, redirectUrl: null));
+      // ── Razorpay path ────────────────────────────────────────────────────
+      // 1. Create order in DB first
+      final orderRes = await api.postApi({...body, 'paymentMethod': 'razorpay'}, ApiConstant.placeOrder);
+      _dbOrderId = (orderRes is Map)
+          ? (orderRes['order']?['_id'] ?? orderRes['order']?['id'] ?? orderRes['orderId'])?.toString()
+          : null;
+
+      // 2. Fetch Razorpay key
+      String rzpKey = '';
+      try {
+        final cfgRes = await api.getApi(ApiConstant.razorpayConfig) as Map;
+        rzpKey = (cfgRes['key'] ?? cfgRes['razorpayKeyId'] ?? '').toString();
+      } catch (_) {}
+
+      // 3. Create Razorpay order
+      final totalPaise = ((totals['total'] ?? 0) * 100).round();
+      final rzpOrderRes = await api.postApi({
+        'amount':   totalPaise,
+        'orderId':  _dbOrderId,
+        'currency': 'INR',
+      }, ApiConstant.razorpayCreateOrder) as Map;
+      _rzpOrderId = (rzpOrderRes['razorpayOrderId'] ?? rzpOrderRes['id'])?.toString();
+
+      // 4. Open Razorpay SDK
+      _initRazorpay();
+      final addr2 = _buildAddress();
+      _razorpay!.open({
+        'key':           rzpKey,
+        'amount':        totalPaise,
+        'order_id':      _rzpOrderId,
+        'currency':      'INR',
+        'name':          'Tobeque',
+        'description':   'Fashion Order',
+        'prefill': {
+          'contact': addr2['phone'],
+          'email':   email.text.trim(),
+          'name':    addr2['name'],
+        },
+        'theme': {'color': '#0D0D0D'},
+      });
+      // payment result arrives via event handlers — do NOT call mutating(false) here
     } catch (e) {
+      mutating(false);
       Get.snackbar('Checkout Failed', e.toString(),
           snackPosition: SnackPosition.BOTTOM, duration: const Duration(seconds: 4));
-    } finally {
-      mutating(false);
     }
   }
 
@@ -208,6 +304,7 @@ class CheckoutController extends GetxController {
 
   @override
   void onClose() {
+    _razorpay?.clear();
     firstName.dispose(); lastName.dispose(); company.dispose(); country.dispose();
     address1.dispose(); address2.dispose(); city.dispose(); state.dispose();
     postcode.dispose(); phone.dispose(); email.dispose();

@@ -6,7 +6,10 @@ import 'package:tobeque/view/prodduct_details/product_details_page.dart';
 import 'package:tobeque/view/wishlist/wish_button.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:shimmer/shimmer.dart';
 import 'package:intl/intl.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:tobeque/constants/api_constants.dart';
 import '../home/home_repository.dart';
 
 enum SortMode { popular, priceLowHigh, priceHighLow }
@@ -522,6 +525,11 @@ print(_all);
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         centerTitle: false,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: '',
+          onPressed: () => Navigator.maybePop(context),
+        ),
         title: Text(widget.title,
           style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
       ),
@@ -641,7 +649,7 @@ SliverToBoxAdapter(
                   crossAxisCount: grid == GridMode.two ? 2 : 3,
                   mainAxisSpacing: 12,
                   crossAxisSpacing: 12,
-                  childAspectRatio: grid == GridMode.two ? 0.58 : 0.64,
+                  childAspectRatio: grid == GridMode.two ? 0.55 : 0.60,
                 ),
              // inside: SliverPadding -> SliverGrid -> delegate: SliverChildBuilderDelegate(
 delegate: SliverChildBuilderDelegate(
@@ -877,9 +885,25 @@ class SwipeGalleryState extends State<SwipeGallery> {
 List<String> _imagesFromProduct(Map<String, dynamic> p) {
   final imgs = (p['images'] as List? ?? []);
   final urls = <String>[];
-  for (final m in imgs.whereType<Map>()) {
-    final u = _sanitizeUrl(m['src']?.toString());
-    if (u != null && u.isNotEmpty) urls.add(u);
+
+  // 1. Extract from featuredImage first if available
+  final feat = _sanitizeUrl(p['featuredImage']?.toString());
+  if (feat != null && feat.isNotEmpty) {
+    urls.add(feat);
+  }
+
+  // 2. Extract from images array
+  for (final m in imgs) {
+    String? rawSrc;
+    if (m is Map) {
+      rawSrc = (m['imageUrl'] ?? m['url'] ?? m['src'])?.toString();
+    } else if (m != null) {
+      rawSrc = m.toString();
+    }
+    final u = _sanitizeUrl(rawSrc);
+    if (u != null && u.isNotEmpty && !urls.contains(u)) {
+      urls.add(u);
+    }
   }
 
   // Fallbacks if the product has 0 images
@@ -1164,34 +1188,32 @@ class _ResilientImage extends StatefulWidget {
 }
 
 class _ResilientImageState extends State<_ResilientImage> {
-  int _idx = 0;
-
   @override
   Widget build(BuildContext context) {
     if (widget.sources.isEmpty) {
       return const ColoredBox(color: Color(0xfff2f2f2));
     }
-    final url = widget.sources[_idx];
-    return Image.network(
-      url,
+    final url = widget.sources.firstWhere(
+      (s) => s.isNotEmpty && s.startsWith('http'),
+      orElse: () => '',
+    );
+    if (url.isEmpty) {
+      return const ColoredBox(color: Color(0xfff2f2f2));
+    }
+
+    return CachedNetworkImage(
+      imageUrl: url,
       fit: widget.fit,
-      loadingBuilder: (ctx, child, evt) {
-        if (evt == null) return child;
-        return const ShimmerWave(
-          period: Duration(milliseconds: 2200),
-          direction: ShineDirection.diagonal,
-          tiltDegrees: 20,
-          child: ColoredBox(color: Color(0xFFEDEDED)),
-        );
-      },
-      errorBuilder: (_, __, ___) {
-        if (_idx < widget.sources.length - 1) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) setState(() => _idx++);
-          });
-        }
-        return const ColoredBox(color: Color(0xfff2f2f2));
-      },
+      placeholder: (ctx, _) => const ShimmerWave(
+        period: Duration(milliseconds: 2200),
+        direction: ShineDirection.diagonal,
+        tiltDegrees: 20,
+        child: ColoredBox(color: Color(0xFFEDEDED)),
+      ),
+      errorWidget: (_, __, ___) => const ColoredBox(
+        color: Color(0xfff2f2f2),
+        child: Icon(Icons.image_not_supported_outlined, color: Colors.black26, size: 24),
+      ),
     );
   }
 }
@@ -1254,6 +1276,7 @@ String? _sanitizeUrl(String? u) {
   if (u == null || u.isEmpty) return null;
   var x = u.trim().replaceAll(' ', '%20');
   if (x.startsWith('http://')) x = x.replaceFirst('http://', 'https://');
+  if (!x.startsWith('http')) return ApiConstant.getImageUrl(x);
   return x;
 }
 

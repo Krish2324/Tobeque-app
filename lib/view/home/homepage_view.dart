@@ -1,12 +1,15 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:shimmer/shimmer.dart';
+import 'package:tobeque/constants/api_constants.dart';
 import 'package:tobeque/view/home/widgets/footer_section.dart';
 import 'package:tobeque/view/home/widgets/promo_banner.dart';
 import 'package:tobeque/view/wishlist/wish_button.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:chewie/chewie.dart';
+import 'package:video_player/video_player.dart';
 import 'package:intl/intl.dart';
 import 'package:youtube_player_iframe/youtube_player_iframe.dart';
 
@@ -120,95 +123,147 @@ class HomePageView extends StatelessWidget {
 //   ),
 // ),
 // ═══════════════════════════════════════════════════════════
-// SECTION 1 — SHOP BY CATEGORY  (2-column portrait grid)
+// SECTION 1 — SHOP BY CATEGORY
 // ═══════════════════════════════════════════════════════════
 SliverToBoxAdapter(
   child: Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
+    crossAxisAlignment: CrossAxisAlignment.center,
     children: [
-      // Section heading
-      Padding(
-        padding: const EdgeInsets.fromLTRB(16, 28, 16, 14),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('SHOP BY', style: TextStyle(fontSize: 11, letterSpacing: 3, color: Colors.black45, fontWeight: FontWeight.w600)),
-                const SizedBox(height: 2),
-                Text('Category', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
-              ],
-            ),
-          ],
-        ),
-      ),
-      // 2-column category grid
+      const SizedBox(height: 18),
+      const _SectionHeaderWidget(subtitle: 'Shop By', title: 'Category'),
+      const SizedBox(height: 14),
       Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12),
         child: _CategoryGrid(cats: c.cats),
       ),
-      const SizedBox(height: 32),
+      const SizedBox(height: 20),
     ],
   ),
 ),
 
 // ═══════════════════════════════════════════════════════════
-// SECTION 2 — NEW ARRIVALS heading + horizontal product scroll
+// SECTION 2 — HAND-PICKED FEATURED PICKS (Paginated 6 Initial Items)
 // ═══════════════════════════════════════════════════════════
 SliverToBoxAdapter(
   child: Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
+    crossAxisAlignment: CrossAxisAlignment.center,
     children: [
-      // Divider
-      Container(height: 1, color: const Color(0xFFF0F0F0)),
-      const SizedBox(height: 28),
-      Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('TRENDING NOW', style: TextStyle(fontSize: 11, letterSpacing: 3, color: Colors.black45, fontWeight: FontWeight.w600)),
-                const SizedBox(height: 2),
-                Text('New Arrivals', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
-              ],
-            ),
-            GestureDetector(
-              onTap: () {/* Navigate to all products */},
-              child: Text('View all', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.black54, decoration: TextDecoration.underline)),
-            ),
-          ],
-        ),
-      ),
-      const SizedBox(height: 16),
+      const SizedBox(height: 8),
+      const _SectionHeaderWidget(subtitle: 'Hand-Picked', title: 'Featured Picks'),
+      const SizedBox(height: 14),
     ],
   ),
 ),
+SliverPadding(
+  padding: const EdgeInsets.symmetric(horizontal: 4),
+  sliver: Obx(() {
+    final list = c.best;
+    if (list.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
+    final displayCount = math.min(c.visibleFeaturedCount.value, list.length);
+    return SliverGrid(
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        mainAxisSpacing: 4,
+        crossAxisSpacing: 4,
+        childAspectRatio: 0.63,
+      ),
+      delegate: SliverChildBuilderDelegate(
+        (context, index) => _ProductCard(p: list[index]),
+        childCount: displayCount,
+      ),
+    );
+  }),
+),
 SliverToBoxAdapter(
-  child: _InterestSection(products: c.best),
+  child: Obx(() {
+    final list = c.best;
+    if (list.isEmpty) return const SizedBox.shrink();
+    final hasMore = c.visibleFeaturedCount.value < list.length;
+    if (hasMore) {
+      final remaining = list.length - c.visibleFeaturedCount.value;
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(0, 16, 0, 24),
+          child: OutlinedButton.icon(
+            onPressed: c.loadMoreFeatured,
+            icon: const Icon(Icons.add, size: 14, color: Colors.black),
+            label: Text(
+              'LOAD MORE PRODUCTS ($remaining MORE)',
+              style: const TextStyle(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.8,
+                color: Colors.black,
+              ),
+            ),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 13),
+              side: const BorderSide(color: Colors.black, width: 1.5),
+              shape: const StadiumBorder(),
+              backgroundColor: Colors.white,
+              elevation: 0,
+            ),
+          ),
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(0, 12, 0, 24),
+      child: Text(
+        'ALL ${list.length} FEATURED PRODUCTS LOADED',
+        textAlign: TextAlign.center,
+        style: const TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 1.5,
+          color: Color(0xFF757575),
+        ),
+      ),
+    );
+  }),
 ),
 
 // ═══════════════════════════════════════════════════════════
-// SECTION 3 — Editorial dark CTA banner
+// SECTION 3 — PROMO BANNER (Full-Bleed Summer Trend Banner)
 // ═══════════════════════════════════════════════════════════
 SliverToBoxAdapter(
-  child: _EditorialBanner(),
+  child: _PromoBannerWidget(controller: c),
 ),
 
- SliverToBoxAdapter(child: StoreFooterTobeque(
-  onSubscribe: () { /* open subscribe flow */ },
-  onCall: () { /* launch phone */ },
-  onChat: () { /* open chat */ },
-  onPrivacy: () { /* navigate */ },
-  onTerms: () { /* navigate */ },
-  onCookies: () { /* navigate */ },
-  onCookieSettings: () { /* navigate */ },
-  appVersion: '1.0.0',
-)),
+// ═══════════════════════════════════════════════════════════
+// SECTION 4 — ON SALE SECTION
+// ═══════════════════════════════════════════════════════════
+SliverToBoxAdapter(
+  child: Obx(() => c.onSale.isNotEmpty
+      ? _OnSaleSection(products: c.onSale)
+      : const SizedBox.shrink()),
+),
+
+// ═══════════════════════════════════════════════════════════
+// SECTION 5 — HOT RIGHT NOW SECTION (SEE WHAT'S TRENDING)
+// ═══════════════════════════════════════════════════════════
+SliverToBoxAdapter(
+  child: Obx(() => c.hotRightNow.isNotEmpty
+      ? _HotRightNowSection(products: c.hotRightNow)
+      : const SizedBox.shrink()),
+),
+SliverToBoxAdapter(child: const SizedBox(height: 6)),
+
+// ═══════════════════════════════════════════════════════════
+// SECTION 6 — FOOTER
+// ═══════════════════════════════════════════════════════════
+SliverToBoxAdapter(
+  child: StoreFooterTobeque(
+    onSubscribe: () { /* open subscribe flow */ },
+    onCall: () { /* launch phone */ },
+    onChat: () { /* open chat */ },
+    onPrivacy: () { /* navigate */ },
+    onTerms: () { /* navigate */ },
+    onCookies: () { /* navigate */ },
+    onCookieSettings: () { /* navigate */ },
+    appVersion: '1.0.0',
+  ),
+),
           ],
         ),
       );
@@ -217,39 +272,70 @@ SliverToBoxAdapter(
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   CATEGORY GRID  — 2-column tall portrait cards
+   CATEGORY GRID  — Tall portrait cards matching website
    ═══════════════════════════════════════════════════════════════ */
 
-class _CategoryGrid extends StatelessWidget {
+class _CategoryGrid extends StatefulWidget {
   const _CategoryGrid({required this.cats});
   final List<WcCategory> cats;
 
   @override
+  State<_CategoryGrid> createState() => _CategoryGridState();
+}
+
+class _CategoryGridState extends State<_CategoryGrid> {
+  final ScrollController _scroll = ScrollController();
+  Timer? _timer;
+  bool _isUserInteracting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _startAutoScroll();
+  }
+
+  void _startAutoScroll() {
+    _timer?.cancel();
+    _timer = Timer.periodic(const Duration(milliseconds: 30), (_) {
+      if (!_scroll.hasClients || widget.cats.isEmpty || _isUserInteracting) return;
+      _scroll.jumpTo(_scroll.offset + 1.0);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    if (cats.isEmpty) return const SizedBox.shrink();
-    // Show in pairs (2 columns)
-    final rows = (cats.length / 2).ceil();
-    return Column(
-      children: List.generate(rows, (row) {
-        final leftIdx  = row * 2;
-        final rightIdx = row * 2 + 1;
-        final leftCat  = cats[leftIdx];
-        final rightCat = rightIdx < cats.length ? cats[rightIdx] : null;
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 10),
-          child: Row(
-            children: [
-              Expanded(child: _CategoryCard(cat: leftCat)),
-              const SizedBox(width: 10),
-              Expanded(
-                child: rightCat != null
-                    ? _CategoryCard(cat: rightCat)
-                    : const SizedBox.shrink(),
-              ),
-            ],
-          ),
-        );
-      }),
+    if (widget.cats.isEmpty) return const SizedBox.shrink();
+    // Large virtual item count for seamless continuous looping without rewinding
+    const virtualCount = 10000;
+
+    return SizedBox(
+      height: 180,
+      child: NotificationListener<ScrollNotification>(
+        onNotification: (notif) {
+          if (notif is ScrollStartNotification && notif.dragDetails != null) {
+            _isUserInteracting = true;
+          } else if (notif is ScrollEndNotification) {
+            _isUserInteracting = false;
+          }
+          return false;
+        },
+        child: ListView.separated(
+          controller: _scroll,
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          physics: const BouncingScrollPhysics(),
+          itemCount: virtualCount,
+          separatorBuilder: (_, __) => const SizedBox(width: 6),
+          itemBuilder: (_, index) => _CategoryCard(cat: widget.cats[index % widget.cats.length]),
+        ),
+      ),
     );
   }
 }
@@ -260,80 +346,78 @@ class _CategoryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final imgUrl = cat.image ?? '';
+
     return GestureDetector(
       onTap: () => Get.to(() => CategoryPage(categoryId: cat.id, title: cat.name)),
-      child: AspectRatio(
-        aspectRatio: 3 / 4,
+      child: Container(
+        width: 134,
+        height: 180,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(3),
+        ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: BorderRadius.circular(3),
           child: Stack(
             fit: StackFit.expand,
             children: [
-              // Background image
-              if (cat.image != null && cat.image!.isNotEmpty)
+              if (imgUrl.isNotEmpty)
                 CachedNetworkImage(
-                  imageUrl: cat.image!,
+                  imageUrl: imgUrl,
+                  memCacheWidth: 350,
+                  maxWidthDiskCache: 350,
                   fit: BoxFit.cover,
-                  width: double.infinity,
-                  height: double.infinity,
-                  placeholder: (_, __) => _ShimmerBox(),
-                  errorWidget: (_, __, ___) => Container(color: const Color(0xFFEEEEEE)),
+                  placeholder: (_, __) => const _ShimmerBox(),
+                  errorWidget: (_, __, ___) => Container(
+                    color: const Color(0xFFF2F2F2),
+                    child: const Icon(Icons.style_outlined, color: Colors.black26, size: 28),
+                  ),
                 )
               else
-                Container(color: const Color(0xFFF0F0F0)),
+                Container(
+                  color: const Color(0xFFF2F2F2),
+                  child: const Icon(Icons.style_outlined, color: Colors.black26, size: 28),
+                ),
 
-              // Gradient overlay (bottom-heavy for text legibility)
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.transparent,
-                      Colors.black.withOpacity(0.18),
-                      Colors.black.withOpacity(0.72),
-                    ],
-                    stops: const [0.4, 0.72, 1.0],
+              // Dark bottom gradient overlay
+              Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.transparent,
+                        Colors.black.withValues(alpha: 0.15),
+                        Colors.black.withValues(alpha: 0.8),
+                      ],
+                      stops: const [0.4, 0.7, 1.0],
+                    ),
                   ),
                 ),
               ),
 
-              // Category label at bottom
+              // Bottom Category Name Label (matching website design)
               Positioned(
-                left: 0, right: 0, bottom: 0,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 14),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        cat.name.toUpperCase(),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 1.1,
-                          height: 1.2,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                        child: const Text(
-                          'SHOP',
-                          style: TextStyle(
-                            color: Colors.black,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 1.5,
-                          ),
-                        ),
+                bottom: 12,
+                left: 10,
+                right: 10,
+                child: Text(
+                  cat.name.toUpperCase(),
+                  textAlign: TextAlign.left,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.0,
+                    height: 1.15,
+                    shadows: [
+                      Shadow(
+                        color: Colors.black54,
+                        blurRadius: 4,
+                        offset: Offset(0, 1),
                       ),
                     ],
                   ),
@@ -359,12 +443,12 @@ class _EditorialBanner extends StatelessWidget {
     final w = MediaQuery.of(context).size.width;
     return Container(
       width: w,
-      margin: const EdgeInsets.symmetric(vertical: 28, horizontal: 12),
+      margin: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
       decoration: BoxDecoration(
         color: const Color(0xFF1A1A1A),
         borderRadius: BorderRadius.circular(6),
       ),
-      padding: const EdgeInsets.fromLTRB(28, 36, 28, 36),
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -431,35 +515,8 @@ class _HeroMedia extends StatefulWidget {
 }
 
 class _HeroMediaState extends State<_HeroMedia> {
-  bool _minHoldElapsed = false; // short hold to avoid flicker
-  bool _precacheDone = false; // short hold to avoid flicker
   final PageController _pageController = PageController();
   int _currentPage = 0;
-
- @override
-  void initState() {
-    super.initState();
-    // small minimum hold
-    Future.delayed(const Duration(milliseconds: 2700), () {
-      if (mounted) setState(() => _minHoldElapsed = true);
-    });
-
-    // Alternative fix (works too):
-    // WidgetsBinding.instance.addPostFrameCallback((_) {
-    //   if (mounted) precacheImage(const AssetImage('assets/home.png'), context);
-    // });
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    // ✅ Safe place to use context-dependent lookups like MediaQuery
-    if (!_precacheDone) {
-      precacheImage(const AssetImage('assets/home.png'), context);
-      _precacheDone = true;
-    }
-  }
-
 
   @override
   void dispose() {
@@ -469,7 +526,7 @@ class _HeroMediaState extends State<_HeroMedia> {
 
   @override
   Widget build(BuildContext context) {
-    // Bottom overlay (kept empty for now)
+    // Bottom overlay
     const overlay = Align(
       alignment: Alignment.bottomCenter,
       child: Padding(
@@ -501,11 +558,7 @@ class _HeroMediaState extends State<_HeroMedia> {
       );
     }
 
-    Widget placeholder() => Image.asset(
-          'assets/home.png',
-          fit: BoxFit.fitHeight,
-          errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-        );
+    Widget placeholder() => const _ShimmerBox(borderRadius: 0);
 
     Widget fallbackImage() {
       final banners = widget.controller.heroData.value?.mobileBanners ?? [];
@@ -513,17 +566,11 @@ class _HeroMediaState extends State<_HeroMedia> {
       if (banners.isEmpty) {
         final img = widget.imageFallback ?? '';
         if (img.isEmpty) return placeholder();
-        return Stack(
-          fit: StackFit.expand,
-          children: [
-            placeholder(),
-            Image.network(
-              img,
-              fit: BoxFit.fill,
-              loadingBuilder: (c, child, p) => p == null ? child : const SizedBox.shrink(),
-              errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-            ),
-          ],
+        return CachedNetworkImage(
+          imageUrl: ApiConstant.getImageUrl(img),
+          fit: BoxFit.cover,
+          placeholder: (_, __) => placeholder(),
+          errorWidget: (_, __, ___) => placeholder(),
         );
       }
 
@@ -539,17 +586,11 @@ class _HeroMediaState extends State<_HeroMedia> {
             },
             itemCount: banners.length,
             itemBuilder: (context, index) {
-              return Stack(
-                fit: StackFit.expand,
-                children: [
-                  placeholder(),
-                  Image.network(
-                    banners[index],
-                    fit: BoxFit.fill,
-                    loadingBuilder: (c, child, p) => p == null ? child : const SizedBox.shrink(),
-                    errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-                  ),
-                ],
+              return CachedNetworkImage(
+                imageUrl: ApiConstant.getImageUrl(banners[index]),
+                fit: BoxFit.cover,
+                placeholder: (_, __) => placeholder(),
+                errorWidget: (_, __, ___) => placeholder(),
               );
             },
           ),
@@ -595,12 +636,11 @@ class _HeroMediaState extends State<_HeroMedia> {
         child: IgnorePointer(
           child: Obx(() {
             final stillLoading = widget.controller.showYTPlaceholder.value;
-            final keepPlaceholder = stillLoading || !_minHoldElapsed;
             return Stack(
               fit: StackFit.expand,
               children: [
                 YoutubePlayer(controller: widget.controller.ytCtl!, aspectRatio: 16 / 9),
-                if (keepPlaceholder) placeholder(),
+                if (stillLoading) placeholder(),
               ],
             );
           }),
@@ -615,14 +655,13 @@ class _HeroMediaState extends State<_HeroMedia> {
       final ar = isReady
           ? widget.controller.videoCtl!.value.aspectRatio
           : (16 / 9);
-      final keepPlaceholder = !isReady || !_minHoldElapsed;
 
       return cover(
         child: Stack(
           fit: StackFit.expand,
           children: [
             if (isReady) Chewie(controller: widget.controller.chewieCtl!),
-            if (keepPlaceholder) placeholder(),
+            if (!isReady) placeholder(),
           ],
         ),
         childAspect: ar,
@@ -751,9 +790,23 @@ class _InterestSection extends StatelessWidget {
   }
 }
 
-class _ProductCard extends StatelessWidget {
+class _ProductCard extends StatefulWidget {
   const _ProductCard({required this.p});
   final WcProduct p;
+
+  @override
+  State<_ProductCard> createState() => _ProductCardState();
+}
+
+class _ProductCardState extends State<_ProductCard> {
+  int _imgIndex = 0;
+  final PageController _pc = PageController();
+
+  @override
+  void dispose() {
+    _pc.dispose();
+    super.dispose();
+  }
 
   String _decodeEntities(String s) {
     var out = s.replaceAll('&nbsp;', ' ').replaceAll('&amp;', '&');
@@ -770,14 +823,118 @@ class _ProductCard extends StatelessWidget {
     final stripped = html.replaceAll(RegExp(r'<[^>]*>'), '');
     var decoded = _decodeEntities(stripped).trim();
     decoded = decoded.replaceFirstMapped(RegExp(r'^([^\d\s]+)(\d)'), (m) => '${m[1]} ${m[2]}');
-    return decoded.replaceAll(RegExp(r'([.,])00\b'), '');
+    if (!decoded.contains('.')) {
+      return '$decoded.00';
+    }
+    return decoded;
   }
 
   @override
   Widget build(BuildContext context) {
+    final p = widget.p;
     final name  = _decodeEntities(p.name).trim();
-    final img   = (p.image ?? '').trim();
     final price = _priceFor(p);
+    final imgList = p.images.isNotEmpty 
+        ? p.images 
+        : (p.image != null && p.image!.isNotEmpty ? [p.image!] : <String>[]);
+
+    Widget imageContent;
+    if (imgList.length > 1) {
+      imageContent = Stack(
+        fit: StackFit.expand,
+        children: [
+          PageView.builder(
+            controller: _pc,
+            onPageChanged: (idx) => setState(() => _imgIndex = idx),
+            itemCount: imgList.length,
+            itemBuilder: (_, i) => CachedNetworkImage(
+              imageUrl: imgList[i],
+              memCacheWidth: 400,
+              maxWidthDiskCache: 400,
+              fit: BoxFit.cover,
+              width: double.infinity,
+              height: double.infinity,
+              placeholder: (_, __) => const _ShimmerBox(),
+              errorWidget: (_, __, ___) => Container(
+                color: const Color(0xFFF0F0F0),
+                child: const Icon(Icons.image_not_supported_outlined,
+                    color: Colors.black26, size: 32),
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: 8,
+            left: 0,
+            right: 0,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(imgList.length, (i) {
+                final isSel = i == _imgIndex;
+                return Container(
+                  width: isSel ? 14 : 4,
+                  height: 4,
+                  margin: const EdgeInsets.symmetric(horizontal: 2),
+                  decoration: BoxDecoration(
+                    color: isSel ? Colors.white : Colors.white70,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                );
+              }),
+            ),
+          ),
+        ],
+      );
+    } else {
+      imageContent = Stack(
+        fit: StackFit.expand,
+        children: [
+          if (imgList.isNotEmpty)
+            CachedNetworkImage(
+              imageUrl: imgList.first,
+              memCacheWidth: 400,
+              maxWidthDiskCache: 400,
+              fit: BoxFit.cover,
+              width: double.infinity,
+              height: double.infinity,
+              placeholder: (_, __) => const _ShimmerBox(),
+              errorWidget: (_, __, ___) => Container(
+                color: const Color(0xFFF0F0F0),
+                child: const Icon(Icons.image_not_supported_outlined,
+                    color: Colors.black26, size: 32),
+              ),
+            )
+          else
+            const _ShimmerBox(),
+          Positioned(
+            bottom: 8,
+            left: 0,
+            right: 0,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 14,
+                  height: 3,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(width: 3),
+                Container(
+                  width: 3,
+                  height: 3,
+                  decoration: const BoxDecoration(
+                    color: Colors.white70,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
 
     return GestureDetector(
       onTap: () => Get.to(
@@ -786,30 +943,17 @@ class _ProductCard extends StatelessWidget {
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          // ── PORTRAIT IMAGE ──────────────────────────────────
-          Expanded(
+          // ── PORTRAIT IMAGE (SWIPEABLE) ─────────────────────
+          AspectRatio(
+            aspectRatio: 3 / 4,
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(4),
+              borderRadius: BorderRadius.circular(2),
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  if (img.isNotEmpty)
-                    CachedNetworkImage(
-                      imageUrl: img,
-                      fit: BoxFit.cover,
-                      width: double.infinity,
-                      height: double.infinity,
-                      placeholder: (_, __) => _ShimmerBox(),
-                      errorWidget: (_, __, ___) => Container(
-                        color: const Color(0xFFF0F0F0),
-                        child: const Icon(Icons.image_not_supported_outlined,
-                            color: Colors.black26, size: 32),
-                      ),
-                    )
-                  else
-                    _ShimmerBox(),
-
+                  imageContent,
                   // Wishlist heart (top-right)
                   Positioned(
                     top: 8, right: 8,
@@ -825,29 +969,51 @@ class _ProductCard extends StatelessWidget {
             ),
           ),
 
-          // ── NAME + PRICE ─────────────────────────────────────
-          const SizedBox(height: 8),
-          Text(
-            name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 12.5,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.1,
-            ),
-          ),
-          if (price.isNotEmpty) ...[
-            const SizedBox(height: 3),
-            Text(
-              price,
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w900,
+          // ── NAME + PRICE + SWATCH DOT ─────────────────────────
+          const SizedBox(height: 4),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF4B4B4B),
+                      ),
+                    ),
+                    if (price.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        price,
+                        style: const TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.black,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ),
-            ),
-          ],
-          const SizedBox(height: 8),
+              Container(
+                width: 9,
+                height: 9,
+                margin: const EdgeInsets.only(left: 4),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.black26, width: 1),
+                  color: const Color(0xFF5B6B7C),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -988,4 +1154,697 @@ class _HomeSkeletonLoader extends StatelessWidget {
       ),
     );
   }
-}
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ON SALE SECTION  — horizontal slider with section header
+   ═══════════════════════════════════════════════════════════════ */
+
+class _OnSaleSection extends StatefulWidget {
+  const _OnSaleSection({required this.products});
+  final List<WcProduct> products;
+
+  @override
+  State<_OnSaleSection> createState() => _OnSaleSectionState();
+}
+
+class _OnSaleSectionState extends State<_OnSaleSection> {
+  final ScrollController _scroll = ScrollController();
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  void _scrollBy(double delta) {
+    _scroll.animateTo(
+      (_scroll.offset + delta).clamp(0.0, _scroll.position.maxScrollExtent),
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeOut,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.products.isEmpty) return const SizedBox.shrink();
+    final screenW = MediaQuery.of(context).size.width;
+    final cardW   = screenW * 0.32; // ~3 visible cards
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 16),
+
+        // Section header
+        const _SectionHeaderWidget(subtitle: 'Special Offers', title: 'On Sale'),
+        const SizedBox(height: 14),
+
+        // Slider with arrow buttons overlapping left/right
+        Stack(
+          alignment: Alignment.center,
+          children: [
+            // Products scroll
+            SizedBox(
+              height: cardW * (4 / 3) + 52,
+              child: ListView.separated(
+                controller: _scroll,
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                physics: const BouncingScrollPhysics(),
+                itemCount: widget.products.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 3),
+                itemBuilder: (_, i) => SizedBox(
+                  width: cardW,
+                  child: _OnSaleProductCard(p: widget.products[i]),
+                ),
+              ),
+            ),
+
+            // Left arrow (Luxury Circular Glassmorphism Control)
+            Positioned(
+              left: 6,
+              child: GestureDetector(
+                onTap: () => _scrollBy(-cardW),
+                child: Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.92),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.black.withValues(alpha: 0.08), width: 0.8),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Colors.black12,
+                        blurRadius: 10,
+                        spreadRadius: 1,
+                        offset: Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  alignment: Alignment.center,
+                  child: const Icon(Icons.arrow_back_ios_new_rounded, size: 14, color: Colors.black),
+                ),
+              ),
+            ),
+
+            // Right arrow (Luxury Circular Glassmorphism Control)
+            Positioned(
+              right: 6,
+              child: GestureDetector(
+                onTap: () => _scrollBy(cardW),
+                child: Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.92),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.black.withValues(alpha: 0.08), width: 0.8),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Colors.black12,
+                        blurRadius: 10,
+                        spreadRadius: 1,
+                        offset: Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  alignment: Alignment.center,
+                  child: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Colors.black),
+                ),
+              ),
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 24),
+      ],
+    );
+  }
+}
+
+class _OnSaleProductCard extends StatelessWidget {
+  const _OnSaleProductCard({required this.p});
+  final WcProduct p;
+
+  @override
+  Widget build(BuildContext context) {
+    final img   = (p.image ?? '').trim();
+    final name  = p.displayName.trim();
+    final price = (p.priceHtml ?? '').trim();
+    final orig  = p.originalPrice;
+    final hasSale = orig != null && orig.isNotEmpty;
+
+    return GestureDetector(
+      onTap: () => Get.to(
+        () => ProductDetailPage(key: ValueKey(p.id), productId: p.id),
+        binding: ProductDetailBinding(p.id),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Image
+          AspectRatio(
+            aspectRatio: 3 / 4,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(2),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  if (img.isNotEmpty)
+                    CachedNetworkImage(
+                      imageUrl: img,
+                      memCacheWidth: 350,
+                      maxWidthDiskCache: 350,
+                      fit: BoxFit.cover,
+                      placeholder: (_, __) => const _ShimmerBox(),
+                      errorWidget: (_, __, ___) => Container(color: const Color(0xFFF0F0F0)),
+                    )
+                  else
+                    Container(color: const Color(0xFFF0F0F0)),
+
+                  // Sale badge
+                  if (hasSale)
+                    Positioned(
+                      top: 8,
+                      left: 8,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                        color: const Color(0xFFE53935),
+                        child: Text(
+                          '${p.savePercent}% OFF',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF0D0D0D)),
+          ),
+          const SizedBox(height: 3),
+          Row(
+            children: [
+              Text(price, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF0D0D0D))),
+              if (hasSale) ...[
+                const SizedBox(width: 4),
+                Text(
+                  orig!,
+                  style: const TextStyle(
+                    fontSize: 10,
+                    color: Color(0xFF9E9E9E),
+                    decoration: TextDecoration.lineThrough,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   PROMO BANNER WIDGET  — Full bleed promo banner above Hot Right Now
+   ═══════════════════════════════════════════════════════════════ */
+
+class _PromoBannerWidget extends StatelessWidget {
+  const _PromoBannerWidget({required this.controller});
+  final HomeController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final bannerData = controller.bottomBanner.value;
+      if (bannerData != null && bannerData.isNotEmpty) {
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: _BottomPromoBanner(banner: bannerData),
+        );
+      }
+
+      final heroImg = controller.heroData.value?.imageUrl;
+      final mobileImgs = controller.heroData.value?.mobileBanners;
+      String? fallbackUrl;
+      if (mobileImgs != null && mobileImgs.length > 1) {
+        fallbackUrl = mobileImgs[1];
+      } else if (heroImg != null && heroImg.isNotEmpty) {
+        fallbackUrl = heroImg;
+      }
+
+      if (fallbackUrl == null || fallbackUrl.isEmpty) {
+        return const SizedBox.shrink();
+      }
+
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        child: _BottomPromoBanner(
+          banner: {
+            'imageUrl': fallbackUrl,
+            'title': 'Summer TREND',
+            'subtitle': 'Discover the latest fashion. New arrivals every week.',
+            'linkUrl': '/shop',
+          },
+        ),
+      );
+    });
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   BOTTOM PROMO BANNER  — full-bleed admin-controlled banner
+   ═══════════════════════════════════════════════════════════════ */
+
+class _BottomPromoBanner extends StatelessWidget {
+  const _BottomPromoBanner({required this.banner});
+  final Map<String, dynamic> banner;
+
+  bool _isVideo(String url) => url.toLowerCase().contains('.mp4') ||
+      url.toLowerCase().contains('.webm') ||
+      url.toLowerCase().contains('/video/');
+
+  @override
+  Widget build(BuildContext context) {
+    final rawUrl  = (banner['mobileImageUrl'] ?? banner['imageUrl'] ?? '').toString();
+    final imgUrl  = rawUrl.isNotEmpty ? ApiConstant.getImageUrl(rawUrl) : '';
+    final title   = banner['title']?.toString() ?? '';
+    final subtitle = banner['subtitle']?.toString() ?? '';
+    final linkUrl  = banner['linkUrl']?.toString() ?? '';
+
+    if (imgUrl.isEmpty) return const SizedBox.shrink();
+
+    return GestureDetector(
+      onTap: linkUrl.isNotEmpty ? () { /* TODO: navigate */ } : null,
+      child: Stack(
+        children: [
+          // Background media
+          AspectRatio(
+            aspectRatio: 16 / 9,
+            child: _isVideo(imgUrl)
+                ? Container(color: Colors.black) // video placeholder (Chewie handled separately)
+                : CachedNetworkImage(
+                    imageUrl: imgUrl,
+                    fit: BoxFit.cover,
+                    width: double.infinity,
+                    placeholder: (_, __) => Container(color: const Color(0xFFF0F0F0)),
+                    errorWidget: (_, __, ___) => Container(color: const Color(0xFFF0F0F0)),
+                  ),
+          ),
+
+          // Gradient overlay
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.transparent,
+                    Colors.black.withValues(alpha: 0.2),
+                    Colors.black.withValues(alpha: 0.65),
+                  ],
+                  stops: const [0.4, 0.7, 1.0],
+                ),
+              ),
+            ),
+          ),
+
+          // Text overlay
+          Positioned(
+            left: 16,
+            right: 16,
+            bottom: 16,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (title.isNotEmpty)
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 2,
+                      height: 1.2,
+                    ),
+                  ),
+                if (subtitle.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 10,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                ],
+                if (linkUrl.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                    decoration: const BoxDecoration(color: Colors.white),
+                    child: const Text(
+                      'SHOP NOW',
+                      style: TextStyle(
+                        color: Colors.black,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 9,
+                        letterSpacing: 2.0,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   HOT RIGHT NOW SECTION  — 9:16 portrait cards with overlay
+   ═══════════════════════════════════════════════════════════════ */
+
+class _HotRightNowSection extends StatefulWidget {
+  const _HotRightNowSection({required this.products});
+  final List<WcProduct> products;
+
+  @override
+  State<_HotRightNowSection> createState() => _HotRightNowSectionState();
+}
+
+class _HotRightNowSectionState extends State<_HotRightNowSection> {
+  final ScrollController _scroll = ScrollController();
+  Timer? _timer;
+  bool _isUserInteracting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _startAutoScroll();
+  }
+
+  void _startAutoScroll() {
+    _timer?.cancel();
+    _timer = Timer.periodic(const Duration(milliseconds: 30), (_) {
+      if (!_scroll.hasClients || widget.products.isEmpty || _isUserInteracting) return;
+      _scroll.jumpTo(_scroll.offset + 1.0);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.products.isEmpty) return const SizedBox.shrink();
+    final screenW = MediaQuery.of(context).size.width;
+    final cardW   = (screenW - 11) / 2; // Exactly 2 cards visible at one time
+    const virtualCount = 10000;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 16),
+
+        // Section header
+        const _SectionHeaderWidget(subtitle: 'Trending Now', title: "See What's Trending"),
+        const SizedBox(height: 14),
+
+        // Horizontal scroll of 9:16 cards with direct physical touch detection
+        SizedBox(
+          height: cardW * (16 / 9),
+          child: NotificationListener<ScrollNotification>(
+            onNotification: (notif) {
+              if (notif is ScrollStartNotification && notif.dragDetails != null) {
+                _isUserInteracting = true;
+              } else if (notif is ScrollEndNotification) {
+                _isUserInteracting = false;
+              }
+              return false;
+            },
+            child: ListView.separated(
+              controller: _scroll,
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              physics: const BouncingScrollPhysics(),
+              itemCount: virtualCount,
+              separatorBuilder: (_, __) => const SizedBox(width: 3),
+              itemBuilder: (_, i) => SizedBox(
+                width: cardW,
+                child: _HotRightNowCard(p: widget.products[i % widget.products.length]),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 28),
+      ],
+    );
+  }
+}
+
+class _HotRightNowCard extends StatelessWidget {
+  const _HotRightNowCard({required this.p});
+  final WcProduct p;
+
+  @override
+  Widget build(BuildContext context) {
+    // prefer hotMedia (video/special image), fall back to main image
+    final mediaUrl = (p.hotMedia?.isNotEmpty == true ? p.hotMedia! : p.image) ?? '';
+    final thumbUrl = p.image ?? '';
+    final name     = p.displayName.trim();
+    final price    = p.priceHtml ?? '';
+    final orig     = p.originalPrice;
+    final hasSale  = orig != null && orig.isNotEmpty;
+    final save     = p.savePercent;
+
+    return GestureDetector(
+      onTap: () => Get.to(
+        () => ProductDetailPage(key: ValueKey(p.id), productId: p.id),
+        binding: ProductDetailBinding(p.id),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(2),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            // Dynamic Video/Image background with fallback to main product image
+            _HotMediaWidget(
+              mediaUrl: mediaUrl,
+              fallbackImageUrl: thumbUrl,
+            ),
+
+            // Gradient overlay (bottom-heavy)
+            DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.transparent,
+                    Colors.black.withOpacity(0.1),
+                    Colors.black.withOpacity(0.85),
+                  ],
+                  stops: const [0.4, 0.65, 1.0],
+                ),
+              ),
+            ),
+
+            // Product info at bottom
+            Positioned(
+              left: 10,
+              right: 10,
+              bottom: 14,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  // Thumbnail
+                  if (thumbUrl.isNotEmpty)
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: CachedNetworkImage(
+                        imageUrl: thumbUrl,
+                        width: 40,
+                        height: 52,
+                        fit: BoxFit.cover,
+                        errorWidget: (_, __, ___) => const SizedBox.shrink(),
+                      ),
+                    ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          name,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            height: 1.3,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Row(
+                          children: [
+                            Text(
+                              price,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            if (hasSale) ...[
+                              const SizedBox(width: 4),
+                              Text(
+                                orig!,
+                                style: const TextStyle(
+                                  color: Colors.white54,
+                                  fontSize: 10,
+                                  decoration: TextDecoration.lineThrough,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        if (save > 0)
+                          Text(
+                            'Save $save% off',
+                            style: const TextStyle(
+                              color: Color(0xFF4CAF50),
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HotMediaWidget extends StatelessWidget {
+  const _HotMediaWidget({required this.mediaUrl, required this.fallbackImageUrl});
+  final String mediaUrl;
+  final String fallbackImageUrl;
+
+  bool get _isVideo {
+    final u = mediaUrl.toLowerCase();
+    if (u.endsWith('.jpg') || u.endsWith('.png') || u.endsWith('.jpeg') || u.endsWith('.webp') || u.endsWith('.gif')) return false;
+    return u.endsWith('.mp4') || u.endsWith('.webm') || u.contains('.m3u8') || u.contains('/video/');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final primaryImg = mediaUrl.isNotEmpty && !_isVideo ? mediaUrl : fallbackImageUrl;
+    final fallbackImg = fallbackImageUrl;
+
+    Widget imageLayer = Container(color: const Color(0xFF1A1A1A));
+    if (primaryImg.isNotEmpty) {
+      imageLayer = CachedNetworkImage(
+        imageUrl: primaryImg,
+        fit: BoxFit.cover,
+        placeholder: (_, __) => const _ShimmerBox(),
+        errorWidget: (_, __, ___) {
+          if (fallbackImg.isNotEmpty && fallbackImg != primaryImg) {
+            return CachedNetworkImage(
+              imageUrl: fallbackImg,
+              fit: BoxFit.cover,
+              placeholder: (_, __) => const _ShimmerBox(),
+              errorWidget: (_, __, ___) => Container(color: const Color(0xFF1A1A1A)),
+            );
+          }
+          return Container(color: const Color(0xFF1A1A1A));
+        },
+      );
+    }
+
+    return imageLayer;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   UI/UX COMPONENTS — Bershka / Zara Style Modular Widgets
+   ═══════════════════════════════════════════════════════════════ */
+
+class _SectionHeaderWidget extends StatelessWidget {
+  const _SectionHeaderWidget({
+    required this.subtitle,
+    required this.title,
+  });
+
+  final String subtitle;
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Row(
+            children: [
+              Expanded(child: Container(height: 1, color: const Color(0xFFE0E0E0))),
+              const SizedBox(width: 14),
+              Text(
+                subtitle.toUpperCase(),
+                style: const TextStyle(
+                  fontSize: 10,
+                  letterSpacing: 3.5,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF757575),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(child: Container(height: 1, color: const Color(0xFFE0E0E0))),
+            ],
+          ),
+        ),
+        if (title.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Text(
+            title.toUpperCase(),
+            style: const TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 2.5,
+              color: Colors.black,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+

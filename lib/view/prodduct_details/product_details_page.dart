@@ -11,6 +11,8 @@ import 'package:tobeque/componant/helper.dart';
 import 'product_detail_controller.dart';
 import 'product_detail_binding.dart';
 import 'size_sheet.dart';
+import 'package:tobeque/constants/string_constant.dart';
+import 'package:tobeque/utills/helper_func.dart';
 
 class ProductDetailPage extends StatelessWidget {
   const ProductDetailPage({super.key, required this.productId});
@@ -635,6 +637,61 @@ class ProductDetailPage extends StatelessWidget {
                           ),
                           const SizedBox(height: 20),
                         ],
+
+                        // ── 6.5 PRODUCT INQUIRY ────────────────────────
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF9F9F9),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: const Color(0xFFEEEEEE)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Have a Question?',
+                                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Colors.black),
+                                    ),
+                                    SizedBox(height: 4),
+                                    Text(
+                                      'Need styling advice or more details?',
+                                      style: TextStyle(fontSize: 12, color: Colors.black87),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              OutlinedButton.icon(
+                                onPressed: () async {
+                                  final name = c.product.value?['name'] ?? 'a product';
+                                  final pId = c.product.value?['_id'] ?? c.product.value?['id'] ?? '';
+                                  final msg = 'Hi Tobeque, I have a question about $name (ID: $pId).';
+                                  final ok = await openWhatsAppChat(Constent.phone, message: msg, defaultCountryCode: '91');
+                                  if (!ok && context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text('Could not open WhatsApp on this device')),
+                                    );
+                                  }
+                                },
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: Colors.black,
+                                  side: const BorderSide(color: Colors.black),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                ),
+                                icon: const Icon(Icons.chat_bubble_outline, size: 16),
+                                label: const Text('Inquire', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        const Divider(height: 1, color: Color(0xFFEEEEEE)),
+                        const SizedBox(height: 24),
 
                         // ── 7. STYLE IT WITH SECTION ──────────────────
                         Obx(() {

@@ -153,7 +153,7 @@ class SearchScreen extends GetView<SearchController> {
                        crossAxisCount:  2 ,
                   mainAxisSpacing: 12,
                   crossAxisSpacing: 4,
-                  childAspectRatio:  0.588 ,
+                   childAspectRatio: 0.55,
                         ),
                       ),
                     ),
