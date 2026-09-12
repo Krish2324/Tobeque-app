@@ -23,12 +23,29 @@ class ProductApi {
     required List cats,
     int perPage = 12,
   }) async {
-    final data = await net.getApi('${ApiConstant.products}?status=published&limit=$perPage');
-    if (data is Map && data['products'] is List) {
-      return (data['products'] as List)
-          .map((e) => (e as Map).cast<String, dynamic>())
-          .where((p) => p['_id']?.toString() != productId.toString() && p['id']?.toString() != productId.toString())
-          .toList();
+    try {
+      final data = await net.getApi('${ApiConstant.products}?status=published&limit=$perPage');
+      List rawList = [];
+      if (data is List) {
+        rawList = data;
+      } else if (data is Map) {
+        if (data['data'] is Map && data['data']['products'] is List) {
+          rawList = data['data']['products'] as List;
+        } else if (data['data'] is List) {
+          rawList = data['data'] as List;
+        } else if (data['products'] is List) {
+          rawList = data['products'] as List;
+        }
+      }
+      
+      if (rawList.isNotEmpty) {
+        return rawList
+            .map((e) => (e as Map).cast<String, dynamic>())
+            .where((p) => p['_id']?.toString() != productId.toString() && p['id']?.toString() != productId.toString())
+            .toList();
+      }
+    } catch (e) {
+      // Return empty list on failure
     }
     return [];
   }

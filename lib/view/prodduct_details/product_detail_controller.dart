@@ -7,13 +7,15 @@ import 'package:intl/intl.dart';
 import 'package:tobeque/data/network/network_api_sarvices.dart';
 import 'package:tobeque/view/prodduct_details/product_api_repo.dart';
 import 'package:tobeque/view/cart/cart_events.dart';
+import 'package:tobeque/view/cart/cart_service.dart';
 import 'package:tobeque/constants/api_constants.dart';
  // for CartBadgeController.refreshNow()
 
 class ProductDetailController extends GetxController {
   ProductDetailController(this.productId);
   final dynamic productId; // Accepts String (MongoDB _id) or int
-final descExpanded = false.obs;
+  final descExpanded = false.obs;
+  final shippingExpanded = false.obs;
   final pageCtrl = PageController();
   late final ProductApi api;
 
@@ -70,15 +72,15 @@ final descExpanded = false.obs;
       error.value = null;
 
       final p = await api.fetchProduct(productId);
+      product.value = p;
+
       final rel = await api.fetchRelatedByFirstCategory(
         productId: productId,
         cats: (p['categories'] as List?) ?? (p['category'] != null ? [p['category']] : const []),
-        perPage: 12,
+        perPage: 20,
       );
 
-      product.value = p;
-      related.assignAll(rel);
-      await _loadStyleItWith(p);
+      await _loadStyleItWithAndRelated(p, rel);
 
       sizeOptions  = _extractSizes(p);
       colorOptions = _extractColors(p);
@@ -213,29 +215,60 @@ final descExpanded = false.obs;
 
   final styleItWithProducts = <Map<String, dynamic>>[].obs;
 
-  Future<void> _loadStyleItWith(Map<String, dynamic> p) async {
+  Future<void> _loadStyleItWithAndRelated(
+    Map<String, dynamic> p,
+    List<Map<String, dynamic>> catalogProducts,
+  ) async {
+    final explicitStyle = <Map<String, dynamic>>[];
     final raw = p['styleItWith'];
     if (raw is List && raw.isNotEmpty) {
-      final list = <Map<String, dynamic>>[];
       for (final item in raw) {
         if (item is Map) {
-          list.add((item).cast<String, dynamic>());
+          explicitStyle.add((item).cast<String, dynamic>());
         } else if (item is String && item.isNotEmpty) {
           try {
             final fetched = await api.fetchProduct(item);
-            if (fetched.isNotEmpty) list.add(fetched);
+            if (fetched.isNotEmpty) explicitStyle.add(fetched);
           } catch (_) {}
         }
       }
-      if (list.isNotEmpty) {
-        styleItWithProducts.assignAll(list);
-        return;
-      }
     }
-    // Fallback: use first few items from related for "STYLE IT WITH"
-    if (related.length >= 2) {
-      styleItWithProducts.assignAll(related.take(4).toList());
+
+    final currentIdStr = (p['_id'] ?? p['id'] ?? '').toString();
+    final explicitIds = explicitStyle.map((e) => (e['_id'] ?? e['id'] ?? '').toString()).toSet();
+
+    // Catalog pool excluding current product & explicit products
+    final catalogPool = catalogProducts.where((prod) {
+      final idStr = (prod['_id'] ?? prod['id'] ?? '').toString();
+      return idStr != currentIdStr && !explicitIds.contains(idStr);
+    }).toList();
+
+    // 1. Build RELATED PRODUCTS (styleItWithProducts): explicit products first, then catalog pool (up to 8)
+    final styleList = <Map<String, dynamic>>[...explicitStyle];
+    for (final item in catalogPool) {
+      if (styleList.length >= 8) break;
+      styleList.add(item);
     }
+    styleItWithProducts.assignAll(styleList);
+
+    // 2. Build YOU MIGHT ALSO LIKE (related): catalog pool items NOT included in styleItWithProducts
+    final styleIds = styleList.map((e) => (e['_id'] ?? e['id'] ?? '').toString()).toSet();
+    final remainingPool = catalogPool.where((prod) {
+      final idStr = (prod['_id'] ?? prod['id'] ?? '').toString();
+      return !styleIds.contains(idStr);
+    }).toList();
+
+    List<Map<String, dynamic>> likeList;
+    if (remainingPool.isNotEmpty) {
+      likeList = remainingPool.take(8).toList();
+    } else if (catalogPool.length > 2) {
+      // If all catalog items were consumed in styleList, reverse/rotate catalogPool for variety so they aren't identical at first glance
+      likeList = catalogPool.reversed.take(8).toList();
+    } else {
+      likeList = catalogPool.take(8).toList();
+    }
+
+    related.assignAll(likeList);
   }
 
   List<Map<String, String>> _extractSizes(Map<String, dynamic> p) {
@@ -440,79 +473,65 @@ final descExpanded = false.obs;
       }
     }
 
-    // Resolve variation id if possible (optional; server can also match)
-    int? varId;
-    if (p != null) {
-      varId = _findVariationId(p, attrs);
-    }
-
     await addToCart(
       context: context,
       productId: productId,
       quantity: qty.value.clamp(1, 999),
       attributes: attrs,
-      variationId: varId,
     );
   }
 
- Future<bool> addToCart({
-  required BuildContext context,
-  required int productId,
-  required int quantity,
-  required Map<String, String> attributes,
-  int? variationId,
-}) async {
-  if (adding.value) return false;
-  adding.value = true;
+  Future<bool> addToCart({
+    required BuildContext context,
+    required dynamic productId,
+    required int quantity,
+    required Map<String, String> attributes,
+    dynamic variationId,
+  }) async {
+    if (adding.value) return false;
+    adding.value = true;
 
-  final events = Get.isRegistered<CartEvents>()
-      ? Get.find<CartEvents>()
-      : Get.put(CartEvents(), permanent: true);
+    try {
+      final p = product.value;
+      final name = (p?['name'] ?? p?['title'] ?? 'Product').toString();
+      final price = formattedPrice;
+      final image = extractedImages.isNotEmpty ? extractedImages.first : null;
+      final pIdStr = (p?['_id'] ?? p?['id'] ?? productId).toString();
 
-  // optimistic bump
-  final oldCount = events.count.value;
-  final inc = (quantity <= 0 ? 1 : quantity);
-  events.setCount((oldCount + inc).clamp(0, 9999));
+      final cartService = Get.isRegistered<CartService>()
+          ? Get.find<CartService>()
+          : Get.put(CartService(), permanent: true);
 
-  try {
-    // --- server call ---
-    await api.addToCart(
-      productId: productId,
-      quantity: quantity,
-      attributes: attributes,
-      variationId: variationId,
-    );
+      cartService.addItem(
+        productId: pIdStr,
+        name: name,
+        price: price,
+        image: image,
+        selectedSize: sizeLabel.value ?? sizeSlug.value,
+        selectedColor: colorLabel.value ?? colorSlug.value,
+        quantity: quantity,
+      );
 
-    // ✅ INSERT HERE
-    events.bump(); // let listeners (cart/badge) know something changed
-    if (Get.isRegistered<CartBadgeController>(tag: 'cart-badge')) {
-      await Get.find<CartBadgeController>(tag: 'cart-badge').refreshNow();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text('Added to bag ✓'),
+          duration: Duration(milliseconds: 1200),
+        ));
+      }
+      return true;
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text('Add to bag failed: $e'),
+        ));
+      }
+      return false;
+    } finally {
+      adding.value = false;
     }
-
-    // (optional) toast
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        behavior: SnackBarBehavior.floating,
-        content: Text('Added to bag'),
-        duration: Duration(milliseconds: 1200),
-      ));
-    }
-    return true;
-
-  } catch (e) {
-    // rollback optimistic bump
-    events.setCount(oldCount);
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        behavior: SnackBarBehavior.floating,
-        content: Text('Add to bag failed: $e'),
-      ));
-    }
-    return false;
-  } finally {
-    adding.value = false;
   }
-}
 
   // ---------- small utils ----------
   void _toast(BuildContext context, String msg) {

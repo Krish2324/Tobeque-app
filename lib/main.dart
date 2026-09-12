@@ -1,5 +1,6 @@
 // main.dart
 import 'package:tobeque/view/cart/cart_events.dart';
+import 'package:tobeque/view/cart/cart_service.dart';
 import 'package:tobeque/view/profile/auth_repository.dart';
 import 'package:tobeque/view/profile/profile_controller.dart';
 import 'package:tobeque/view/root/bage_controller.dart';
@@ -74,6 +75,9 @@ class AppBinding extends Bindings {
   void dependencies() {
     if (!Get.isRegistered<CartEvents>()) {
       Get.put(CartEvents(), permanent: true);
+    }
+    if (!Get.isRegistered<CartService>()) {
+      Get.put(CartService(), permanent: true);
     }
     // make sure badge controller exists from launch
     if (!Get.isRegistered<CartBadgeController>(tag: 'cart-badge')) {

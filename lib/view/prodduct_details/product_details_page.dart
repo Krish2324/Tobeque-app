@@ -13,6 +13,7 @@ import 'product_detail_binding.dart';
 import 'size_sheet.dart';
 import 'package:tobeque/constants/string_constant.dart';
 import 'package:tobeque/utills/helper_func.dart';
+import 'package:tobeque/componant/quick_add_button.dart';
 
 class ProductDetailPage extends StatelessWidget {
   const ProductDetailPage({super.key, required this.productId});
@@ -129,7 +130,7 @@ class ProductDetailPage extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                   ],
-                  expandedHeight: MediaQuery.of(context).size.width * 1.25,
+                  expandedHeight: MediaQuery.of(context).size.width * 1.0,
                   flexibleSpace: FlexibleSpaceBar(
                     background: Stack(
                       fit: StackFit.expand,
@@ -292,39 +293,16 @@ class ProductDetailPage extends StatelessWidget {
 
                         // ── 3. ON-PAGE SIZE SELECTOR ───────────────────────
                         if (c.sizeOptions.isNotEmpty) ...[
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Text(
-                                'Select Size',
-                                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.black),
-                              ),
-                              GestureDetector(
-                                onTap: () => _showSizeGuideModal(context),
-                                child: const Row(
-                                  children: [
-                                    Icon(Icons.straighten, size: 16, color: Colors.black54),
-                                    SizedBox(width: 4),
-                                    Text(
-                                      'Size Guide',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.black87,
-                                        decoration: TextDecoration.underline,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
+                          const Text(
+                            'SIZE',
+                            style: TextStyle(fontSize: 12, letterSpacing: 1.2, fontWeight: FontWeight.w700, color: Colors.black54),
                           ),
                           const SizedBox(height: 12),
                           Obx(() {
                             final selectedSlug = c.sizeSlug.value ?? '';
                             return Wrap(
-                              spacing: 10,
-                              runSpacing: 10,
+                              spacing: 8,
+                              runSpacing: 8,
                               children: c.sizeOptions.map((opt) {
                                 final slug = opt['slug'] ?? '';
                                 final label = opt['label'] ?? slug.toUpperCase();
@@ -332,35 +310,25 @@ class ProductDetailPage extends StatelessWidget {
                                 final inStock = opt['inStock'] != 'false';
 
                                 return GestureDetector(
-                                  onTap: inStock
-                                      ? () {
-                                          c.sizeSlug.value = slug;
-                                          c.sizeLabel.value = label;
-                                        }
-                                      : null,
+                                  onTap: inStock ? () { c.sizeSlug.value = slug; c.sizeLabel.value = label; } : null,
                                   child: AnimatedContainer(
                                     duration: const Duration(milliseconds: 150),
-                                    width: 52,
+                                    width: 44,
                                     height: 44,
                                     alignment: Alignment.center,
                                     decoration: BoxDecoration(
                                       color: isSelected ? Colors.black : Colors.white,
-                                      borderRadius: BorderRadius.circular(6),
                                       border: Border.all(
-                                        color: isSelected
-                                            ? Colors.black
-                                            : (inStock ? const Color(0xFFCCCCCC) : const Color(0xFFEEEEEE)),
-                                        width: isSelected ? 2 : 1,
+                                        color: isSelected ? Colors.black : (inStock ? const Color(0xFFE0E0E0) : const Color(0xFFEEEEEE)),
+                                        width: 1,
                                       ),
                                     ),
                                     child: Text(
                                       label,
                                       style: TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w800,
-                                        color: isSelected
-                                            ? Colors.white
-                                            : (inStock ? Colors.black87 : Colors.black26),
+                                        fontSize: 12,
+                                        fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                                        color: isSelected ? Colors.white : (inStock ? Colors.black87 : Colors.black26),
                                         decoration: inStock ? null : TextDecoration.lineThrough,
                                       ),
                                     ),
@@ -369,7 +337,7 @@ class ProductDetailPage extends StatelessWidget {
                               }).toList(),
                             );
                           }),
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 24),
                         ],
 
                         // ── 4. ON-PAGE COLOR SELECTOR ──────────────────────
@@ -377,15 +345,15 @@ class ProductDetailPage extends StatelessWidget {
                           Row(
                             children: [
                               const Text(
-                                'Select Color',
-                                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.black),
+                                'COLOUR',
+                                style: TextStyle(fontSize: 12, letterSpacing: 1.2, fontWeight: FontWeight.w700, color: Colors.black54),
                               ),
                               Obx(() {
                                 final label = c.colorLabel.value;
                                 if (label == null || label.isEmpty) return const SizedBox.shrink();
                                 return Text(
-                                  '  •  $label',
-                                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black54),
+                                  ' — ${label.toUpperCase()}',
+                                  style: const TextStyle(fontSize: 12, letterSpacing: 1.2, fontWeight: FontWeight.w800, color: Colors.black),
                                 );
                               }),
                             ],
@@ -394,306 +362,342 @@ class ProductDetailPage extends StatelessWidget {
                           Obx(() {
                             final selectedSlug = c.colorSlug.value ?? '';
                             return Wrap(
-                              spacing: 10,
-                              runSpacing: 10,
+                              spacing: 12,
+                              runSpacing: 12,
                               children: c.colorOptions.map((opt) {
                                 final slug = opt['slug'] ?? '';
                                 final label = opt['label'] ?? slug;
                                 final isSelected = selectedSlug == slug;
-                                final swatchColor = guessColor(label) ?? guessColor(slug) ?? Colors.grey.shade400;
-                                final isWhite = swatchColor.value == 0xFFFFFFFF;
+                                final swatchColor = guessColor(label) ?? guessColor(slug) ?? Colors.transparent;
 
                                 return GestureDetector(
-                                  onTap: () {
-                                    c.colorSlug.value = slug;
-                                    c.colorLabel.value = label;
-                                  },
-                                  child: AnimatedContainer(
-                                    duration: const Duration(milliseconds: 150),
-                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                  onTap: () { c.colorSlug.value = slug; c.colorLabel.value = label; },
+                                  child: Container(
+                                    width: 32,
+                                    height: 32,
+                                    padding: const EdgeInsets.all(2),
                                     decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(22),
+                                      shape: BoxShape.circle,
                                       border: Border.all(
-                                        color: isSelected ? Colors.black : const Color(0xFFCCCCCC),
-                                        width: isSelected ? 2 : 1,
+                                        color: isSelected ? Colors.black : Colors.transparent,
+                                        width: 1.5,
                                       ),
                                     ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        // Small circular color preview dot
-                                        Container(
-                                          width: 18,
-                                          height: 18,
-                                          decoration: BoxDecoration(
-                                            color: swatchColor,
-                                            shape: BoxShape.circle,
-                                            border: Border.all(
-                                              color: isWhite ? Colors.black26 : Colors.black12,
-                                              width: 1,
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Text(
-                                          label,
-                                          style: TextStyle(
-                                            fontSize: 12.5,
-                                            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                                            color: Colors.black87,
-                                          ),
-                                        ),
-                                      ],
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: swatchColor,
+                                        border: Border.all(color: Colors.black12, width: 1),
+                                      ),
                                     ),
                                   ),
                                 );
                               }).toList(),
                             );
                           }),
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 24),
                         ],
 
-                        // ── 5. PINCODE & DELIVERY CHECKER ─────────────────
-                        Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF9F9F9),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: const Color(0xFFEEEEEE)),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Row(
+                        // ── 5. ACTION BUTTONS ──────────────────────────────
+                        Row(
+                          children: [
+                            // Quantity
+                            Container(
+                              height: 48,
+                              decoration: BoxDecoration(
+                                border: Border.all(color: const Color(0xFFDDDDDD)),
+                              ),
+                              child: Row(
                                 children: [
-                                  Icon(Icons.local_shipping_outlined, size: 20, color: Colors.black87),
-                                  SizedBox(width: 8),
-                                  Text(
-                                    'Delivery & Services',
-                                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Colors.black),
+                                  IconButton(
+                                    icon: const Icon(Icons.remove, size: 14),
+                                    onPressed: () { if (c.qty.value > 1) c.qty.value--; },
+                                  ),
+                                  Obx(() => Text('${c.qty.value}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13))),
+                                  IconButton(
+                                    icon: const Icon(Icons.add, size: 14),
+                                    onPressed: () => c.qty.value++,
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 12),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: Container(
-                                      height: 44,
-                                      decoration: BoxDecoration(
-                                        color: Colors.white,
-                                        borderRadius: BorderRadius.circular(6),
-                                        border: Border.all(color: const Color(0xFFDDDDDD)),
-                                      ),
-                                      child: TextField(
-                                        onChanged: (v) => c.pincodeText.value = v,
-                                        keyboardType: TextInputType.number,
-                                        maxLength: 6,
-                                        decoration: const InputDecoration(
-                                          hintText: 'Enter 6-digit Pincode',
-                                          hintStyle: TextStyle(fontSize: 13, color: Colors.black38),
-                                          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                          border: InputBorder.none,
-                                          counterText: '',
-                                        ),
-                                      ),
+                            ),
+                            const SizedBox(width: 12),
+                            // ADD TO CART
+                            Expanded(
+                              child: SizedBox(
+                                height: 48,
+                                child: Obx(() {
+                                  final busy = c.adding.value;
+                                  return OutlinedButton(
+                                    onPressed: busy ? null : () => c.addCurrentSelectionToCart(context),
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: Colors.black,
+                                      side: const BorderSide(color: Colors.black, width: 1),
+                                      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
                                     ),
-                                  ),
-                                  const SizedBox(width: 10),
-                                  SizedBox(
-                                    height: 44,
-                                    child: ElevatedButton(
-                                      onPressed: () => c.checkPincode(c.pincodeText.value),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: Colors.black,
-                                        foregroundColor: Colors.white,
-                                        elevation: 0,
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                                      ),
-                                      child: const Text('CHECK', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12)),
-                                    ),
-                                  ),
-                                ],
+                                    child: busy
+                                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                                      : const Text('ADD TO CART', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12, letterSpacing: 1.5)),
+                                  );
+                                }),
                               ),
-                              Obx(() {
-                                final msg = c.pincodeMsg.value;
-                                final ok = c.pincodeOk.value;
-                                if (msg == null) return const SizedBox.shrink();
-                                return Padding(
-                                  padding: const EdgeInsets.only(top: 10),
-                                  child: Row(
-                                    children: [
-                                      Icon(
-                                        ok == true ? Icons.check_circle_outline : Icons.error_outline,
-                                        size: 16,
-                                        color: ok == true ? Colors.green : Colors.redAccent,
-                                      ),
-                                      const SizedBox(width: 6),
-                                      Expanded(
-                                        child: Text(
-                                          msg,
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w600,
-                                            color: ok == true ? Colors.green.shade800 : Colors.redAccent,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              }),
-                              const SizedBox(height: 14),
-
-                              // Trust Badges Grid
-                              const Row(
-                                children: [
-                                  Expanded(
-                                    child: _FeatureBadge(
-                                      icon: Icons.local_shipping_outlined,
-                                      label: 'Free Delivery',
-                                    ),
-                                  ),
-                                  Expanded(
-                                    child: _FeatureBadge(
-                                      icon: Icons.replay_30_sharp,
-                                      label: '7 Days Return',
-                                    ),
-                                  ),
-                                  Expanded(
-                                    child: _FeatureBadge(
-                                      icon: Icons.payments_outlined,
-                                      label: 'COD Available',
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        // BUY NOW
+                        SizedBox(
+                          width: double.infinity,
+                          height: 48,
+                          child: ElevatedButton(
+                            onPressed: () => c.addCurrentSelectionToCart(context), // Typically would go direct to checkout
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.black,
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+                            ),
+                            child: const Text('BUY NOW', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12, letterSpacing: 1.5)),
                           ),
                         ),
-
+                        
+                        const SizedBox(height: 20),
+                        
+                        // ── 6. ASK QUESTION & SHARE ────────────────────────
+                        Row(
+                          children: [
+                            GestureDetector(
+                              onTap: () async {
+                                final n = c.product.value?['name'] ?? 'product';
+                                final pId = c.product.value?['_id'] ?? c.product.value?['id'] ?? '';
+                                final msg = 'Hi Tobeque, I have a question about $n (ID: $pId).';
+                                final ok = await openWhatsAppChat(Constent.phone, message: msg, defaultCountryCode: '91');
+                                if (!ok && context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('Could not open WhatsApp')),
+                                  );
+                                }
+                              },
+                              child: const Row(
+                                children: [
+                                  Icon(Icons.help_outline, size: 16, color: Colors.black45),
+                                  SizedBox(width: 6),
+                                  Text('ASK A QUESTION', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.black54)),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 24),
+                            GestureDetector(
+                              onTap: () {},
+                              child: const Row(
+                                children: [
+                                  Icon(Icons.share_outlined, size: 16, color: Colors.black45),
+                                  SizedBox(width: 6),
+                                  Text('SHARE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.black54)),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
                         const SizedBox(height: 24),
                         const Divider(height: 1, color: Color(0xFFEEEEEE)),
                         const SizedBox(height: 16),
 
-                        // ── 6. EXPANDABLE DESCRIPTION ────────────────────
-                        if (desc.isNotEmpty) ...[
-                          const Text(
-                            'Product Details',
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.black),
+                        // ── 7. DELIVERY & SKU ──────────────────────────────
+                        Row(
+                          children: [
+                            const Icon(Icons.local_shipping_outlined, size: 16, color: Colors.black45),
+                            const SizedBox(width: 8),
+                            const Text('Delivery:', style: TextStyle(fontSize: 12, color: Colors.black54)),
+                            const SizedBox(width: 8),
+                            Text('14 Sep - 15 Sep, 2026', style: TextStyle(fontSize: 12, color: Colors.black87, fontWeight: FontWeight.w600)),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            const SizedBox(width: 24),
+                            const Text('Sku:', style: TextStyle(fontSize: 12, color: Colors.black54)),
+                            const SizedBox(width: 24),
+                            Obx(() {
+                              final baseSku = (p['sku'] ?? 'JC5219').toString();
+                              final curSz = (c.sizeLabel.value ?? c.sizeSlug.value ?? '').toUpperCase();
+                              final curCol = (c.colorLabel.value ?? c.colorSlug.value ?? '').toUpperCase();
+                              String fullSku = baseSku;
+                              if (curSz.isNotEmpty && curCol.isNotEmpty) {
+                                final cCode = curCol.length >= 3 ? curCol.substring(0, 3) : curCol;
+                                fullSku = '$baseSku-$curSz-$cCode';
+                              }
+                              return Text(fullSku, style: const TextStyle(fontSize: 12, color: Colors.black87));
+                            }),
+                          ],
+                        ),
+                        const SizedBox(height: 24),
+
+                        // ── 8. TRUST BADGES ────────────────────────────────
+                        Container(
+                          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF7D7F81),
+                            borderRadius: BorderRadius.circular(12),
                           ),
-                          const SizedBox(height: 8),
-                          Obx(() {
-                            final isExpanded = c.descExpanded.value;
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  desc,
-                                  style: const TextStyle(fontSize: 13.5, height: 1.6, color: Colors.black87),
-                                  maxLines: isExpanded ? null : 4,
-                                  overflow: isExpanded ? TextOverflow.visible : TextOverflow.ellipsis,
-                                ),
-                                const SizedBox(height: 6),
-                                GestureDetector(
-                                  onTap: () => c.descExpanded.toggle(),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
+                          child: Column(
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      children: const [
+                                        Icon(Icons.replay_circle_filled_outlined, color: Color(0xFF4DB6AC), size: 24),
+                                        SizedBox(height: 8),
+                                        Text('7 Day Return', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
+                                        SizedBox(height: 2),
+                                        Text('No Questions Asked', style: TextStyle(color: Colors.white70, fontSize: 9)),
+                                      ],
+                                    ),
+                                  ),
+                                  Container(width: 1, height: 40, color: Colors.black26),
+                                  Expanded(
+                                    child: Column(
+                                      children: const [
+                                        Icon(Icons.local_shipping_outlined, color: Color(0xFF4DB6AC), size: 24),
+                                        SizedBox(height: 8),
+                                        Text('Free Shipping', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
+                                        SizedBox(height: 2),
+                                        Text('on pre-paid orders', style: TextStyle(color: Colors.white70, fontSize: 9)),
+                                      ],
+                                    ),
+                                  ),
+                                  Container(width: 1, height: 40, color: Colors.black26),
+                                  Expanded(
+                                    child: Column(
+                                      children: const [
+                                        Icon(Icons.money_outlined, color: Color(0xFF4DB6AC), size: 24),
+                                        SizedBox(height: 8),
+                                        Text('COD Available', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
+                                        SizedBox(height: 2),
+                                        Text('On All Orders', style: TextStyle(color: Colors.white70, fontSize: 9)),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 16),
+                              const Divider(color: Colors.black26, height: 1),
+                              const SizedBox(height: 12),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text('Guaranteed safe checkout', style: TextStyle(color: Colors.white70, fontSize: 10)),
+                                  Row(
                                     children: [
-                                      Text(
-                                        isExpanded ? 'Show Less' : 'Read More',
-                                        style: const TextStyle(
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w800,
-                                          color: Colors.black,
-                                          decoration: TextDecoration.underline,
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                        decoration: BoxDecoration(color: const Color(0xFF1A1F71), borderRadius: BorderRadius.circular(2)),
+                                        child: const Text('VISA', style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.w900, fontStyle: FontStyle.italic)),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                        decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(2)),
+                                        child: const Row(
+                                          children: [
+                                            Icon(Icons.circle, color: Colors.red, size: 8),
+                                            Icon(Icons.circle, color: Colors.orange, size: 8),
+                                          ],
                                         ),
                                       ),
-                                      Icon(
-                                        isExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
-                                        size: 18,
-                                        color: Colors.black,
+                                      const SizedBox(width: 4),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                        decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(2)),
+                                        child: const Text('UPI', style: TextStyle(color: Colors.green, fontSize: 8, fontWeight: FontWeight.w800)),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                        decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(2)),
+                                        child: const Text('COD', style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.w800)),
                                       ),
                                     ],
                                   ),
-                                ),
-                              ],
-                            );
-                          }),
-                          const SizedBox(height: 20),
-                        ],
-
-                        // Fabric & Care
-                        if (fabricCare.isNotEmpty) ...[
-                          const Text(
-                            'Fabric & Care',
-                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.black),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            fabricCare,
-                            style: const TextStyle(fontSize: 13, height: 1.5, color: Colors.black87),
-                          ),
-                          const SizedBox(height: 20),
-                        ],
-
-                        // ── 6.5 PRODUCT INQUIRY ────────────────────────
-                        Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF9F9F9),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: const Color(0xFFEEEEEE)),
-                          ),
-                          child: Row(
-                            children: [
-                              const Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'Have a Question?',
-                                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Colors.black),
-                                    ),
-                                    SizedBox(height: 4),
-                                    Text(
-                                      'Need styling advice or more details?',
-                                      style: TextStyle(fontSize: 12, color: Colors.black87),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              OutlinedButton.icon(
-                                onPressed: () async {
-                                  final name = c.product.value?['name'] ?? 'a product';
-                                  final pId = c.product.value?['_id'] ?? c.product.value?['id'] ?? '';
-                                  final msg = 'Hi Tobeque, I have a question about $name (ID: $pId).';
-                                  final ok = await openWhatsAppChat(Constent.phone, message: msg, defaultCountryCode: '91');
-                                  if (!ok && context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(content: Text('Could not open WhatsApp on this device')),
-                                    );
-                                  }
-                                },
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: Colors.black,
-                                  side: const BorderSide(color: Colors.black),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                                ),
-                                icon: const Icon(Icons.chat_bubble_outline, size: 16),
-                                label: const Text('Inquire', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
+                                ],
                               ),
                             ],
                           ),
                         ),
                         const SizedBox(height: 24),
-                        const Divider(height: 1, color: Color(0xFFEEEEEE)),
-                        const SizedBox(height: 24),
 
-                        // ── 7. STYLE IT WITH SECTION ──────────────────
+                        // ── 9. ACCORDIONS (DESCRIPTION & SHIPPING/RETURNS) ──
+                        Obx(() {
+                          final isDescOpen = c.descExpanded.value;
+                          final isShippingOpen = c.shippingExpanded.value;
+                          final shippingPolicyText = (p['shippingReturns'] ?? p['shippingReturnsText'] ?? 'Orders are processed within 1-2 business days. Returns accepted within 14 days of delivery.').toString();
+
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (desc.isNotEmpty) ...[
+                                GestureDetector(
+                                  onTap: () => c.descExpanded.toggle(),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(vertical: 16),
+                                    decoration: const BoxDecoration(
+                                      border: Border(top: BorderSide(color: Color(0xFFEEEEEE)), bottom: BorderSide(color: Color(0xFFEEEEEE))),
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        const Text('DESCRIPTION', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Colors.black54, letterSpacing: 1.2)),
+                                        Icon(isDescOpen ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, color: Colors.black45, size: 18),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                if (isDescOpen)
+                                  Padding(
+                                    padding: const EdgeInsets.all(16),
+                                    child: Text(
+                                      desc,
+                                      style: const TextStyle(fontSize: 13, height: 1.6, color: Colors.black87),
+                                    ),
+                                  ),
+                              ],
+
+                              // SHIPPING & RETURNS
+                              GestureDetector(
+                                onTap: () => c.shippingExpanded.toggle(),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                  decoration: BoxDecoration(
+                                    border: Border(
+                                      top: desc.isEmpty ? const BorderSide(color: Color(0xFFEEEEEE)) : BorderSide.none,
+                                      bottom: const BorderSide(color: Color(0xFFEEEEEE)),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      const Text('SHIPPING & RETURNS', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Colors.black54, letterSpacing: 1.2)),
+                                      Icon(isShippingOpen ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, color: Colors.black45, size: 18),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              if (isShippingOpen)
+                                Padding(
+                                  padding: const EdgeInsets.all(16),
+                                  child: Text(
+                                    shippingPolicyText,
+                                    style: const TextStyle(fontSize: 13, height: 1.6, color: Colors.black54),
+                                  ),
+                                ),
+                            ],
+                          );
+                        }),
+                        const SizedBox(height: 40),
+
+                        // ── 10. RELATED PRODUCTS SECTION ──────────────────
                         Obx(() {
                           final styleItems = c.styleItWithProducts;
                           if (styleItems.isEmpty) return const SizedBox.shrink();
@@ -701,7 +705,7 @@ class ProductDetailPage extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               const Text(
-                                'STYLE IT WITH',
+                                'RELATED PRODUCTS',
                                 style: TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.w800,
@@ -741,130 +745,56 @@ class ProductDetailPage extends StatelessWidget {
                           );
                         }),
 
-                        // ── 8. RELATED PRODUCTS SECTION ─────────────────
-                        if (c.related.isNotEmpty) ...[
-                          const Text(
-                            'YOU MAY ALSO LIKE',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 1.2,
-                              color: Colors.black,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          SizedBox(
-                            height: 260,
-                            child: ListView.separated(
-                              scrollDirection: Axis.horizontal,
-                              physics: const BouncingScrollPhysics(),
-                              itemCount: c.related.length,
-                              separatorBuilder: (_, __) => const SizedBox(width: 12),
-                              itemBuilder: (ctx, idx) {
-                                final item = c.related[idx];
-                                final relId = (item['_id'] ?? item['id'] ?? '').toString();
-                                return SizedBox(
-                                  width: 140,
-                                  child: _RelatedProductCard(
-                                    p: item,
-                                    onTap: () => Get.to(
-                                      () => ProductDetailPage(key: ValueKey(relId), productId: relId),
-                                      binding: ProductDetailBinding(relId),
-                                      preventDuplicates: false,
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                          const SizedBox(height: 80),
-                        ],
+                        // ── 11. YOU MIGHT ALSO LIKE SECTION ─────────────────
+                        Obx(() {
+                          final rel = c.related;
+                          if (rel.isEmpty) return const SizedBox.shrink();
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'YOU MIGHT ALSO LIKE',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 1.2,
+                                  color: Colors.black,
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              SizedBox(
+                                height: 260,
+                                child: ListView.separated(
+                                  scrollDirection: Axis.horizontal,
+                                  physics: const BouncingScrollPhysics(),
+                                  itemCount: rel.length,
+                                  separatorBuilder: (_, __) => const SizedBox(width: 12),
+                                  itemBuilder: (ctx, idx) {
+                                    final item = rel[idx];
+                                    final relId = (item['_id'] ?? item['id'] ?? '').toString();
+                                    return SizedBox(
+                                      width: 140,
+                                      child: _RelatedProductCard(
+                                        p: item,
+                                        onTap: () => Get.to(
+                                          () => ProductDetailPage(key: ValueKey(relId), productId: relId),
+                                          binding: ProductDetailBinding(relId),
+                                          preventDuplicates: false,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                              const SizedBox(height: 80),
+                            ],
+                          );
+                        }),
                       ],
                     ),
                   ),
                 ),
               ],
-            ),
-
-            // ── 8. STICKY BOTTOM ACTION BAR ──────────────────────────
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: Container(
-                padding: EdgeInsets.fromLTRB(16, 12, 16, MediaQuery.of(context).padding.bottom + 12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.08),
-                      blurRadius: 10,
-                      offset: const Offset(0, -4),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    // Quantity Selector
-                    Container(
-                      height: 48,
-                      decoration: BoxDecoration(
-                        border: Border.all(color: const Color(0xFFDDDDDD)),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Row(
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.remove, size: 16),
-                            onPressed: () {
-                              if (c.qty.value > 1) c.qty.value--;
-                            },
-                          ),
-                          Obx(() => Text(
-                                '${c.qty.value}',
-                                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
-                              )),
-                          IconButton(
-                            icon: const Icon(Icons.add, size: 16),
-                            onPressed: () => c.qty.value++,
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-
-                    // ADD TO BAG Button
-                    Expanded(
-                      child: SizedBox(
-                        height: 48,
-                        child: Obx(() {
-                          final busy = c.adding.value;
-                          return ElevatedButton.icon(
-                            onPressed: busy ? null : () => c.addCurrentSelectionToCart(context),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.black,
-                              foregroundColor: Colors.white,
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                            ),
-                            icon: busy
-                                ? const SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                                  )
-                                : const Icon(Icons.shopping_bag_outlined, size: 18),
-                            label: Text(
-                              busy ? 'ADDING...' : 'ADD TO BAG',
-                              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 0.8),
-                            ),
-                          );
-                        }),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
             ),
           ],
         ),
@@ -1047,13 +977,26 @@ class _RelatedProductCard extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.black87),
           ),
-          if (priceStr.isNotEmpty) ...[
-            const SizedBox(height: 2),
-            Text(
-              priceStr,
-              style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w900, color: Colors.black),
-            ),
-          ],
+          const SizedBox(height: 2),
+          Row(
+            children: [
+              if (priceStr.isNotEmpty)
+                Text(
+                  priceStr,
+                  style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w900, color: Colors.black),
+                ),
+              const Spacer(),
+              Container(
+                width: 12,
+                height: 12,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.black12, width: 1),
+                  color: guessColor(name) ?? const Color(0xFF5B6B7C),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );

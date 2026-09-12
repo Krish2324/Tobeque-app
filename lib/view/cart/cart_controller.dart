@@ -1,13 +1,10 @@
-// lib/view/cart/cart_controller.dart
-import 'package:tobeque/view/cart/cart_events.dart';
-
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
-
-
 import 'package:tobeque/constants/api_constants.dart';
 import 'package:tobeque/data/network/network_api_sarvices.dart';
 import 'package:tobeque/view/prodduct_details/product_api_repo.dart';
+import 'package:tobeque/view/cart/cart_events.dart';
+import 'package:tobeque/view/cart/cart_service.dart';
 
 class CartController extends GetxController {
   CartController(this._events);
@@ -16,105 +13,106 @@ class CartController extends GetxController {
 
   // deps
   late final ProductApi api;
-final popular = <Map<String, dynamic>>[].obs;
+  final popular = <Map<String, dynamic>>[].obs;
+
   // state
-  final loading = true.obs;        // only for first load / pull-to-refresh
-  final mutating = false.obs;      // 👈 NEW: short overlay for updates
+  final loading = true.obs;
+  final mutating = false.obs;
   final error = RxnString();
   final cart = Rxn<Map<String, dynamic>>();
- bool _pending = false;
+
   List get items => (cart.value?['items'] as List?) ?? const [];
-List<Map<String, dynamic>> get popularNotInCart {
-  final inCartNames = items
-      .map((i) => (i['name'] ?? '').toString().toLowerCase().trim())
-      .toSet();
-  return popular
-      .where((p) => !inCartNames.contains(
-          (p['name'] ?? '').toString().toLowerCase().trim()))
-      .toList();
-}
+
+  List<Map<String, dynamic>> get popularNotInCart {
+    final inCartNames = items
+        .map((i) => (i['name'] ?? '').toString().toLowerCase().trim())
+        .toSet();
+    return popular
+        .where((p) => !inCartNames.contains(
+            (p['name'] ?? '').toString().toLowerCase().trim()))
+        .toList();
+  }
+
   @override
   void onInit() {
     super.onInit();
     api = ProductApi(NetworkApi());
     fetchCart();
     ever<int>(_events.version, (_) => fetchCart());
-     fetchPopular();
+    fetchPopular();
   }
 
+  Future<void> fetchPopular() async {
+    try {
+      final res = await api.net.getApi(
+        '${ApiConstant.products}?status=published&limit=12',
+      );
+      List list = [];
+      if (res is Map) {
+        if (res['data'] is Map && res['data']['products'] is List) {
+          list = res['data']['products'];
+        } else if (res['products'] is List) {
+          list = res['products'];
+        }
+      } else if (res is List) {
+        list = res;
+      }
+      popular.assignAll(
+        list.whereType<Map>().map((m) => m.cast<String, dynamic>()),
+      );
+    } catch (_) {}
+  }
 
-
-  // CartController.dart (add method)
-Future<void> fetchPopular() async {
-  try {
-    final res = await api.net.getApi(
-      '${ApiConstant.products}?status=published&limit=12',
-    );
-    List list = [];
-    if (res is Map && res['products'] is List) {
-      list = res['products'];
-    } else if (res is List) {
-      list = res;
+  String formatPrice(String raw) {
+    double value = 0;
+    try {
+      final clean = raw.replaceAll(RegExp(r'[^0-9.]'), '');
+      value = double.tryParse(clean) ?? 0;
+    } catch (_) {
+      value = 0;
     }
-    popular.assignAll(
-      list.whereType<Map>().map((m) => m.cast<String, dynamic>()),
-    );
-  } catch (_) {
-    // ignore silently – cart still works even if popular fails
+    return '₹${NumberFormat.decimalPattern('en_IN').format(value.round())}';
   }
-}
-
- /// Format raw price (in paise or cents, integer) to ₹X,XXX style
-String formatPrice(String raw) {
-  // Extract digits (handles "1,234", "₹1234", etc.)
-  int minor;
-  try {
-    minor = int.parse(raw.replaceAll(RegExp(r'[^\d-]'), '')); // keep minus just in case
-  } catch (_) {
-    minor = 0;
-  }
-
-  // Assume 2 minor units (paise/cents)
-  final isZeroCents = minor % 100 == 0;
-  final rupees = minor ~/ 100;
-  final value  = minor / 100.0;
-
-  if (isZeroCents) {
-    // No decimals (₹4,500)
-    final whole = NumberFormat.decimalPattern('en_IN').format(rupees);
-    return '₹$whole';
-  } else {
-    // Keep two decimals (₹4,500.50)
-    final withCents = NumberFormat.currency(
-      locale: 'en_IN',
-      symbol: '₹',
-      decimalDigits: 2,
-    ).format(value);
-    return withCents;
-  }
-}
   
   Future<void> fetchCart() async {
     try {
       loading.value = true;
       error.value = null;
-      final c = await api.fetchCart();
-      if (c != null && c is Map<String, dynamic>) {
-        cart.value = c;
-      } else {
-        cart.value = {'items': []};
-      }
+
+      final cartService = Get.isRegistered<CartService>()
+          ? Get.find<CartService>()
+          : Get.put(CartService(), permanent: true);
+
+      final localItems = cartService.items.map((i) => {
+        'key': i.cartId,
+        'id': i.productId,
+        'product_id': i.productId,
+        'name': i.name,
+        'price': i.price,
+        'quantity': i.quantity,
+        'image': i.image,
+        'selectedSize': i.selectedSize,
+        'selectedColor': i.selectedColor,
+        'thumbnail': i.image,
+        'attributes': [
+          if (i.selectedSize != null) {'name': 'Size', 'option': i.selectedSize},
+          if (i.selectedColor != null) {'name': 'Color', 'option': i.selectedColor},
+        ]
+      }).toList();
+
+      final total = cartService.totalPrice;
+      cart.value = {
+        'items': localItems,
+        'items_count': cartService.count,
+        'totals': {
+          'total_price': total,
+          'total_price_rendered': '₹${NumberFormat.decimalPattern('en_IN').format(total.round())}',
+          'items_total_rendered': '₹${NumberFormat.decimalPattern('en_IN').format(total.round())}',
+        }
+      };
     } catch (e) {
-      final errStr = e.toString();
-      // If endpoint not found (HTML 404) or network issue, fallback to clean empty bag view
-      if (errStr.contains('<!DOCTYPE') || errStr.contains('Cannot GET') || errStr.contains('html')) {
-        cart.value = {'items': []};
-        error.value = null;
-      } else {
-        // Safe clean error string without raw HTML tags
-        cart.value = {'items': []};
-        error.value = null;
-      }
+      cart.value = {'items': []};
+      error.value = null;
     } finally {
       loading.value = false;
     }
@@ -123,18 +121,14 @@ String formatPrice(String raw) {
   // ---------- Totals ----------
   String cartSubtotal() {
     final totals = (cart.value?['totals'] as Map?)?.cast<String, dynamic>();
-    if (totals == null) return '';
-    return totals['items_total_rendered']?.toString() ??
-        totals['total_items']?.toString() ??
-        '';
+    if (totals == null) return '₹0';
+    return totals['items_total_rendered']?.toString() ?? '₹0';
   }
 
   String cartTotal() {
     final totals = (cart.value?['totals'] as Map?)?.cast<String, dynamic>();
-    if (totals == null) return '';
-    return totals['total_price_rendered']?.toString() ??
-        totals['total_price']?.toString() ??
-        '';
+    if (totals == null) return '₹0';
+    return totals['total_price_rendered']?.toString() ?? '₹0';
   }
 
   // ---------- Mutations ----------
@@ -142,7 +136,7 @@ String formatPrice(String raw) {
     final key = item['key']?.toString();
     final q = (item['quantity'] as num?)?.toInt() ?? 1;
     if (key == null) return;
-    await _setQty(key, q + 1);
+    _setQty(key, q + 1);
   }
 
   Future<void> decQty(Map item) async {
@@ -150,48 +144,29 @@ String formatPrice(String raw) {
     final q = (item['quantity'] as num?)?.toInt() ?? 1;
     if (key == null) return;
     if (q <= 1) return;
-    await _setQty(key, q - 1);
+    _setQty(key, q - 1);
   }
 
-  Future<void> _setQty(String key, int qty) async {
-    try {
-      mutating.value = true;                         // 👈 show blur
-      final c = await api.updateCartQty(itemKey: key, quantity: qty);
-      cart.value = c;
-      _events.bump();                                // notify others
-    } catch (e) {
-      Get.snackbar('Cart', 'Failed to update quantity: $e');
-    } finally {
-      mutating.value = false;                        // 👈 hide blur
+  void _setQty(String key, int qty) {
+    if (Get.isRegistered<CartService>()) {
+      Get.find<CartService>().updateQuantity(key, qty);
+      fetchCart();
     }
   }
 
   Future<void> removeItem(Map item) async {
     final key = item['key']?.toString();
     if (key == null) return;
-    try {
-      mutating.value = true;                         // 👈 show blur
-      final c = await api.removeCartItem(key);
-      cart.value = c;
-      _events.bump();
-    } catch (e) {
-      print(e);
-      Get.snackbar('Cart', 'Failed to remove item: $e');
-    } finally {
-      mutating.value = false;                        // 👈 hide blur
+    if (Get.isRegistered<CartService>()) {
+      Get.find<CartService>().removeItem(key);
+      fetchCart();
     }
   }
 
   Future<void> clearCart() async {
-    try {
-      mutating.value = true;                         // 👈 show blur
-      final c = await api.clearCart();
-      cart.value = c;
-      _events.bump();
-    } catch (e) {
-      Get.snackbar('Cart', 'Failed to clear cart: $e');
-    } finally {
-      mutating.value = false;                        // 👈 hide blur
+    if (Get.isRegistered<CartService>()) {
+      Get.find<CartService>().clear();
+      fetchCart();
     }
   }
 

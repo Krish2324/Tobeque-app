@@ -14,6 +14,8 @@ import 'package:intl/intl.dart';
 import 'package:youtube_player_iframe/youtube_player_iframe.dart';
 
 
+import 'package:tobeque/componant/helper.dart';
+
 import '../cetegory/category_page.dart';
 import '../prodduct_details/product_detail_binding.dart';
 import '../prodduct_details/product_details_page.dart';
@@ -1009,7 +1011,7 @@ class _ProductCardState extends State<_ProductCard> {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   border: Border.all(color: Colors.black26, width: 1),
-                  color: const Color(0xFF5B6B7C),
+                  color: guessColor(name) ?? const Color(0xFF5B6B7C),
                 ),
               ),
             ],
