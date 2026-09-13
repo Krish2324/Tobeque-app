@@ -10,10 +10,8 @@ import 'package:tobeque/view/root/bage_controller.dart';
 import 'package:tobeque/componant/helper.dart';
 import 'product_detail_controller.dart';
 import 'product_detail_binding.dart';
-import 'size_sheet.dart';
 import 'package:tobeque/constants/string_constant.dart';
 import 'package:tobeque/utills/helper_func.dart';
-import 'package:tobeque/componant/quick_add_button.dart';
 
 class ProductDetailPage extends StatelessWidget {
   const ProductDetailPage({super.key, required this.productId});
@@ -135,7 +133,7 @@ class ProductDetailPage extends StatelessWidget {
                     background: Stack(
                       fit: StackFit.expand,
                       children: [
-                        // Image PageView
+                        // Image PageView with pull-down gesture to expand
                         PageView.builder(
                           controller: c.pageCtrl,
                           onPageChanged: (i) => c.page.value = i,
@@ -450,7 +448,7 @@ class ProductDetailPage extends StatelessWidget {
                           width: double.infinity,
                           height: 48,
                           child: ElevatedButton(
-                            onPressed: () => c.addCurrentSelectionToCart(context), // Typically would go direct to checkout
+                            onPressed: () => c.buyNow(context),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.black,
                               foregroundColor: Colors.white,
@@ -803,33 +801,22 @@ class ProductDetailPage extends StatelessWidget {
   }
 
   void _openImageLightbox(BuildContext context, List<String> images, int initialIndex) {
-    showDialog(
-      context: context,
-      builder: (_) => Dialog(
-        backgroundColor: Colors.black,
-        insetPadding: EdgeInsets.zero,
-        child: Stack(
-          children: [
-            PageView.builder(
-              controller: PageController(initialPage: initialIndex),
-              itemCount: images.length,
-              itemBuilder: (_, i) => InteractiveViewer(
-                child: CachedNetworkImage(
-                  imageUrl: images[i],
-                  fit: BoxFit.contain,
-                ),
-              ),
+    if (images.isEmpty) return;
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        opaque: false,
+        barrierColor: Colors.black.withOpacity(0.92),
+        pageBuilder: (context, animation, secondaryAnimation) {
+          return FadeTransition(
+            opacity: animation,
+            child: _FullScreenImageViewer(
+              images: images,
+              initialIndex: initialIndex,
             ),
-            Positioned(
-              top: 40,
-              right: 16,
-              child: IconButton(
-                icon: const Icon(Icons.close, color: Colors.white, size: 28),
-                onPressed: () => Navigator.of(context).pop(),
-              ),
-            ),
-          ],
-        ),
+          );
+        },
+        transitionDuration: const Duration(milliseconds: 280),
+        reverseTransitionDuration: const Duration(milliseconds: 220),
       ),
     );
   }
@@ -902,6 +889,165 @@ class ProductDetailPage extends StatelessWidget {
             ),
             const SizedBox(height: 20),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// ─────────────────────────────────────────────────────────────────────────────
+/// Smooth Full Screen Image Viewer Widget with Pinch-to-Zoom & Pull Down Gesture
+/// ─────────────────────────────────────────────────────────────────────────────
+class _FullScreenImageViewer extends StatefulWidget {
+  const _FullScreenImageViewer({
+    required this.images,
+    required this.initialIndex,
+  });
+
+  final List<String> images;
+  final int initialIndex;
+
+  @override
+  State<_FullScreenImageViewer> createState() => _FullScreenImageViewerState();
+}
+
+class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
+  late final PageController _pageCtrl;
+  late int _currentIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentIndex = widget.initialIndex;
+    _pageCtrl = PageController(initialPage: widget.initialIndex);
+  }
+
+  @override
+  void dispose() {
+    _pageCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: SafeArea(
+        child: GestureDetector(
+          onVerticalDragEnd: (details) {
+            if (details.primaryVelocity != null && details.primaryVelocity! > 150) {
+              Navigator.of(context).pop();
+            }
+          },
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              // Swipable + Zoomable Image Carousel
+              PageView.builder(
+                controller: _pageCtrl,
+                itemCount: widget.images.length,
+                onPageChanged: (index) {
+                  setState(() => _currentIndex = index);
+                },
+                itemBuilder: (context, i) {
+                  return InteractiveViewer(
+                    minScale: 0.8,
+                    maxScale: 4.0,
+                    child: CachedNetworkImage(
+                      imageUrl: widget.images[i],
+                      fit: BoxFit.contain,
+                      placeholder: (_, __) => const Center(
+                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                      ),
+                      errorWidget: (_, __, ___) => const Icon(
+                        Icons.broken_image_outlined,
+                        color: Colors.white54,
+                        size: 64,
+                      ),
+                    ),
+                  );
+                },
+              ),
+
+              // Top Header Controls (Dismiss Button, Image Counter, Close)
+              Positioned(
+                top: 12,
+                left: 16,
+                right: 16,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    // Pull down / Dismiss Button
+                    GestureDetector(
+                      onTap: () => Navigator.of(context).pop(),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white, size: 20),
+                            SizedBox(width: 4),
+                            Text(
+                              'Dismiss',
+                              style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    // Counter
+                    if (widget.images.length > 1)
+                      Text(
+                        '${_currentIndex + 1} / ${widget.images.length}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 1,
+                        ),
+                      ),
+
+                    // Close Icon Button
+                    IconButton(
+                      icon: const Icon(Icons.close, color: Colors.white, size: 26),
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Bottom Swipe Down Hint
+              Positioned(
+                bottom: 20,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.6),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.swipe_down_rounded, color: Colors.white70, size: 16),
+                        SizedBox(width: 6),
+                        Text(
+                          'Swipe down to exit full screen',
+                          style: TextStyle(color: Colors.white70, fontSize: 11),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

@@ -1,7 +1,9 @@
-// lib/view/checkout/checkout_controller.dart
 import 'dart:async';
+import 'package:intl/intl.dart';
 import 'package:tobeque/constants/api_constants.dart';
 import 'package:tobeque/view/checkout/checkout_sucess_screen.dart';
+import 'package:tobeque/view/profile/profile_screen.dart';
+import 'package:tobeque/view/cart/cart_service.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:tobeque/data/network/network_api_sarvices.dart';
@@ -59,6 +61,10 @@ class CheckoutController extends GetxController {
   final couponCtrl = TextEditingController();
   final noteCtrl = TextEditingController();
 
+  final fetchingPincode = false.obs;
+  final pincodeStatusMsg = RxnString();
+  final pincodeValid = RxnBool();
+
   void useSaved(bool isBilling) {
     final addr = isBilling ? savedBilling : savedShipping;
     if (addr.isEmpty) return;
@@ -69,6 +75,53 @@ class CheckoutController extends GetxController {
     postcode.text = (addr['postcode'] ?? addr['zip'] ?? '').toString();
     phone.text = (addr['phone'] ?? '').toString();
     selectedSaved.value = isBilling ? 0 : 1;
+    if (postcode.text.trim().length == 6) {
+      lookupPincode(postcode.text.trim());
+    }
+  }
+
+  Future<void> lookupPincode(String code) async {
+    final trimmed = code.trim();
+    if (trimmed.length != 6 || int.tryParse(trimmed) == null) {
+      pincodeValid.value = null;
+      pincodeStatusMsg.value = null;
+      return;
+    }
+
+    fetchingPincode.value = true;
+    pincodeStatusMsg.value = 'Fetching location details…';
+    pincodeValid.value = null;
+
+    try {
+      final response = await api.getApi('https://api.postalpincode.in/pincode/$trimmed');
+      if (response is List && response.isNotEmpty) {
+        final resObj = response.first;
+        if (resObj is Map && resObj['Status'] == 'Success') {
+          final poList = resObj['PostOffice'] as List?;
+          if (poList != null && poList.isNotEmpty) {
+            final po = poList.first as Map;
+            final fetchedCity = (po['District'] ?? po['Block'] ?? po['Name'] ?? '').toString();
+            final fetchedState = (po['State'] ?? '').toString();
+            final fetchedCountry = (po['Country'] ?? 'India').toString();
+
+            if (fetchedCity.isNotEmpty) city.text = fetchedCity;
+            if (fetchedState.isNotEmpty) state.text = fetchedState;
+            if (fetchedCountry.isNotEmpty) country.text = fetchedCountry;
+
+            pincodeValid.value = true;
+            pincodeStatusMsg.value = '$fetchedCity, $fetchedState ($fetchedCountry)';
+            return;
+          }
+        }
+      }
+      pincodeValid.value = false;
+      pincodeStatusMsg.value = 'Invalid or unserviceable pincode';
+    } catch (_) {
+      pincodeValid.value = false;
+      pincodeStatusMsg.value = 'Pincode lookup error';
+    } finally {
+      fetchingPincode.value = false;
+    }
   }
 
   String addressPretty(Map<String, dynamic> a) {
@@ -94,12 +147,61 @@ class CheckoutController extends GetxController {
     loading(true);
     error.value = null;
     try {
+      await _loadCartItems();
       await _whoAmI();
     } catch (e) {
       error.value = e.toString();
     } finally {
       loading(false);
     }
+  }
+
+  Future<void> _loadCartItems() async {
+    final cartService = Get.isRegistered<CartService>()
+        ? Get.find<CartService>()
+        : Get.put(CartService(), permanent: true);
+
+    await cartService.restoreCart();
+
+    final list = <Map<String, dynamic>>[];
+    for (final i in cartService.items) {
+      final priceNum = double.tryParse(i.price.toString().replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0;
+      final lineTotal = priceNum * i.quantity;
+      list.add({
+        'key': i.cartId,
+        'id': i.productId,
+        'productId': i.productId,
+        'name': i.name,
+        'price': i.price,
+        'quantity': i.quantity,
+        'image': i.image,
+        'selectedSize': i.selectedSize,
+        'selectedColor': i.selectedColor,
+        'totals': {
+          'line_total': lineTotal,
+          'line_total_rendered': '₹${NumberFormat.decimalPattern('en_IN').format(lineTotal.round())}',
+        }
+      });
+    }
+
+    items.assignAll(list);
+    _recalculateTotals();
+  }
+
+  void _recalculateTotals() {
+    final cartService = Get.isRegistered<CartService>()
+        ? Get.find<CartService>()
+        : Get.put(CartService(), permanent: true);
+
+    final subtotalVal = cartService.totalPrice;
+    final finalTotal = (subtotalVal + shippingCost.value - discountAmount.value).clamp(0.0, double.infinity);
+
+    totals.value = {
+      'subtotal': subtotalVal,
+      'total': finalTotal,
+      'subtotal_price': subtotalVal,
+      'total_price': finalTotal,
+    };
   }
 
   Future<void> refreshAll() async {
@@ -119,6 +221,9 @@ class CheckoutController extends GetxController {
       city.text = (user['city'] ?? '').toString();
       state.text = (user['state'] ?? '').toString();
       postcode.text = (user['zipCode'] ?? '').toString();
+      if (postcode.text.trim().length == 6) {
+        lookupPincode(postcode.text.trim());
+      }
     } catch (_) {
       me.value = null;
     }
@@ -131,23 +236,71 @@ class CheckoutController extends GetxController {
         'city': city.text.trim(),
         'state': state.text.trim(),
         'zip': postcode.text.trim(),
-        'country': 'India',
+        'country': country.text.trim().isNotEmpty ? country.text.trim() : 'India',
       };
+
+  List<Map<String, dynamic>> _buildOrderItems() {
+    final cartService = Get.isRegistered<CartService>()
+        ? Get.find<CartService>()
+        : Get.put(CartService(), permanent: true);
+
+    final result = <Map<String, dynamic>>[];
+    for (final item in cartService.items) {
+      final rawPriceStr = item.price.toString().replaceAll(RegExp(r'[^0-9.]'), '');
+      final double parsedPrice = double.tryParse(rawPriceStr) ?? 0.0;
+
+      result.add({
+        'productId': item.productId,
+        'price': parsedPrice,
+        'quantity': item.quantity,
+        'variantDetails': {
+          'size': item.selectedSize,
+          'color': item.selectedColor,
+        },
+      });
+    }
+    return result;
+  }
 
   Future<void> applyCoupon() async {
     final code = couponCtrl.text.trim();
     if (code.isEmpty) return;
     mutating(true);
     try {
-      final res = await api.postApi({'code': code}, ApiConstant.validateCoupon) as Map;
+      final cartService = Get.isRegistered<CartService>()
+          ? Get.find<CartService>()
+          : Get.put(CartService(), permanent: true);
+      final subtotalVal = cartService.totalPrice;
+
+      final res = await api.postApi({
+        'code': code,
+        'cartTotal': subtotalVal,
+      }, ApiConstant.validateCoupon) as Map;
+
       if (res['coupon'] != null) {
-        if (!appliedCoupons.contains(code)) {
-          appliedCoupons.add(code);
+        final couponData = res['coupon'] as Map;
+        final String couponCodeStr = (couponData['code'] ?? code).toString();
+        final String type = (couponData['type'] ?? 'fixed').toString();
+        final num discValue = (couponData['discountValue'] as num?) ?? 0;
+
+        double computedDiscount = 0.0;
+        if (type == 'percentage') {
+          computedDiscount = (subtotalVal * discValue.toDouble()) / 100.0;
+        } else {
+          computedDiscount = discValue.toDouble();
         }
-        Get.snackbar('Coupon Applied', 'Coupon $code applied successfully!');
+        if (computedDiscount > subtotalVal) {
+          computedDiscount = subtotalVal;
+        }
+
+        discountAmount.value = computedDiscount;
+        appliedCoupons.assignAll([couponCodeStr]);
+        _recalculateTotals();
+
+        Get.snackbar('Coupon Applied', 'Coupon $couponCodeStr applied successfully!');
       }
     } catch (e) {
-      Get.snackbar('Coupon Error', e.toString());
+      Get.snackbar('Coupon Error', e.toString().replaceAll('Exception: ', ''));
     } finally {
       mutating(false);
     }
@@ -155,13 +308,15 @@ class CheckoutController extends GetxController {
 
   Future<void> removeCoupon(String code) async {
     appliedCoupons.remove(code);
+    discountAmount.value = 0.0;
+    _recalculateTotals();
     couponCtrl.clear();
   }
 
   // ── Razorpay ──────────────────────────────────────────────────────────────
   Razorpay? _razorpay;
-  String?   _rzpOrderId;   // Razorpay order id from backend
-  String?   _dbOrderId;    // MongoDB order id (for success screen)
+  String?   _rzpOrderId;
+  Map<String, dynamic>? _pendingRazorpayOrderPayload;
 
   void _initRazorpay() {
     _razorpay = Razorpay();
@@ -171,18 +326,40 @@ class CheckoutController extends GetxController {
   }
 
   void _handlePaymentSuccess(PaymentSuccessResponse response) async {
-    // Verify with backend
     try {
-      await api.postApi({
-        'razorpay_order_id':   _rzpOrderId,
+      final verifyPayload = {
+        ...?_pendingRazorpayOrderPayload,
+        'razorpay_order_id': response.orderId ?? _rzpOrderId,
         'razorpay_payment_id': response.paymentId,
-        'razorpay_signature':  response.signature,
-        'dbOrderId':           _dbOrderId,
-      }, ApiConstant.razorpayVerify);
-    } catch (_) {}
-    _razorpay?.clear();
+        'razorpay_signature': response.signature,
+      };
+      await _verifyAndFinalizeRazorpayOrder(verifyPayload);
+    } catch (e) {
+      mutating(false);
+      Get.snackbar(
+        'Payment Verification Failed',
+        e.toString().replaceAll('Exception: ', ''),
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: const Color(0xFFE53935),
+        colorText: Colors.white,
+        duration: const Duration(seconds: 4),
+      );
+    } finally {
+      _razorpay?.clear();
+    }
+  }
+
+  Future<void> _verifyAndFinalizeRazorpayOrder(Map<String, dynamic> verifyPayload) async {
+    final res = await api.postApi(verifyPayload, ApiConstant.razorpayVerify);
+    final orderId = (res is Map)
+        ? (res['order']?['_id'] ?? res['order']?['id'] ?? res['orderId'])?.toString()
+        : null;
+
+    if (Get.isRegistered<CartService>()) {
+      Get.find<CartService>().clear();
+    }
     mutating(false);
-    Get.off(() => CheckoutSuccessScreen(orderId: _dbOrderId, redirectUrl: null));
+    Get.off(() => CheckoutSuccessScreen(orderId: orderId, redirectUrl: null));
   }
 
   void _handlePaymentError(PaymentFailureResponse response) {
@@ -209,83 +386,152 @@ class CheckoutController extends GetxController {
   }
 
   Future<void> placeOrder() async {
-    if (!(formKey.currentState?.validate() ?? false)) return;
+    // 1. Check login status
+    if (me.value == null) {
+      Get.snackbar(
+        'Login Required',
+        'Please log in to your account before placing an order.',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: const Color(0xFF1976D2),
+        colorText: Colors.white,
+        duration: const Duration(seconds: 4),
+      );
+      Get.to(() => const ProfileScreen());
+      return;
+    }
+
+    // 2. Validate delivery form fields
+    if (!(formKey.currentState?.validate() ?? false)) {
+      Get.snackbar(
+        'Incomplete Details',
+        'Please fill in all required delivery fields (name, phone, email, pincode, address, city, state).',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: const Color(0xFFE53935),
+        colorText: Colors.white,
+        duration: const Duration(seconds: 4),
+      );
+      return;
+    }
+
     mutating(true);
 
     try {
       final addr = _buildAddress();
-      final body = {
-        'customerName':    addr['name'],
-        'customerPhone':   addr['phone'],
-        'shippingAddress': addr,
-        'billingAddress':  addr,
-        'items':           items,
-        'couponCode':      appliedCoupons.isNotEmpty ? appliedCoupons.first : null,
-        'paymentMethod':   selectedPaymentId.value,
-        'notes':           noteCtrl.text.trim(),
-        'shippingCost':    shippingCost.value,
-      };
+      final formattedItems = _buildOrderItems();
+
+      if (formattedItems.isEmpty) {
+        mutating(false);
+        Get.snackbar('Empty Cart', 'Your shopping bag is empty.');
+        return;
+      }
+
+      final appliedCouponCode = appliedCoupons.isNotEmpty ? appliedCoupons.first : null;
 
       // ── COD path ─────────────────────────────────────────────────────────
       if (selectedPaymentId.value == 'cod') {
+        final body = {
+          'customerName':    addr['name'],
+          'customerPhone':   addr['phone'],
+          'shippingAddress': addr,
+          'billingAddress':  addr,
+          'items':           formattedItems,
+          'couponCode':      appliedCouponCode,
+          'paymentMethod':   'cod',
+          'notes':           noteCtrl.text.trim(),
+          'shippingCost':    shippingCost.value,
+        };
+
         final res     = await api.postApi(body, ApiConstant.placeOrder);
         final orderId = (res is Map) ? (res['order']?['_id'] ?? res['order']?['id'] ?? res['orderId'])?.toString() : null;
+        if (Get.isRegistered<CartService>()) {
+          Get.find<CartService>().clear();
+        }
         mutating(false);
         Get.off(() => CheckoutSuccessScreen(orderId: orderId, redirectUrl: null));
         return;
       }
 
       // ── Razorpay path ────────────────────────────────────────────────────
-      // 1. Create order in DB first
-      final orderRes = await api.postApi({...body, 'paymentMethod': 'razorpay'}, ApiConstant.placeOrder);
-      _dbOrderId = (orderRes is Map)
-          ? (orderRes['order']?['_id'] ?? orderRes['order']?['id'] ?? orderRes['orderId'])?.toString()
-          : null;
-
-      // 2. Fetch Razorpay key
+      // 1. Fetch Razorpay key
       String rzpKey = '';
       try {
         final cfgRes = await api.getApi(ApiConstant.razorpayConfig) as Map;
         rzpKey = (cfgRes['key'] ?? cfgRes['razorpayKeyId'] ?? '').toString();
       } catch (_) {}
 
-      // 3. Create Razorpay order
-      final totalPaise = ((totals['total'] ?? 0) * 100).round();
-      final rzpOrderRes = await api.postApi({
-        'amount':   totalPaise,
-        'orderId':  _dbOrderId,
-        'currency': 'INR',
-      }, ApiConstant.razorpayCreateOrder) as Map;
-      _rzpOrderId = (rzpOrderRes['razorpayOrderId'] ?? rzpOrderRes['id'])?.toString();
+      // 2. Create Razorpay order on backend
+      final rzpPayload = {
+        'items':        formattedItems,
+        'couponCode':   appliedCouponCode,
+        'shippingCost': shippingCost.value,
+      };
 
-      // 4. Open Razorpay SDK
+      final rzpOrderRes = await api.postApi(rzpPayload, ApiConstant.razorpayCreateOrder) as Map;
+
+      _pendingRazorpayOrderPayload = {
+        'customerName':    addr['name'],
+        'customerPhone':   addr['phone'],
+        'shippingAddress': addr,
+        'billingAddress':  addr,
+        'items':           formattedItems,
+        'couponCode':      appliedCouponCode,
+        'notes':           noteCtrl.text.trim(),
+        'shippingCost':    shippingCost.value,
+      };
+
+      // Check if zero amount order (e.g. 100% coupon discount)
+      if (rzpOrderRes['isZeroAmount'] == true) {
+        await _verifyAndFinalizeRazorpayOrder({
+          ...?_pendingRazorpayOrderPayload,
+          'razorpay_payment_id': 'pay_zero_discount',
+          'razorpay_order_id':   'order_zero_discount',
+          'razorpay_signature':  'zero_discount',
+        });
+        return;
+      }
+
+      _rzpOrderId = (rzpOrderRes['orderId'] ?? rzpOrderRes['id'])?.toString();
+      final int amountInPaise = ((rzpOrderRes['amount'] as num?) ?? (totals['total'] ?? 0) * 100).toInt();
+
+      // 3. Open Razorpay SDK
       _initRazorpay();
-      final addr2 = _buildAddress();
       _razorpay!.open({
-        'key':           rzpKey,
-        'amount':        totalPaise,
-        'order_id':      _rzpOrderId,
-        'currency':      'INR',
-        'name':          'Tobeque',
-        'description':   'Fashion Order',
+        'key':         rzpKey,
+        'amount':      amountInPaise,
+        'order_id':    _rzpOrderId,
+        'currency':    'INR',
+        'name':        'Tobeque',
+        'description': 'Fashion Order',
         'prefill': {
-          'contact': addr2['phone'],
+          'contact': addr['phone'],
           'email':   email.text.trim(),
-          'name':    addr2['name'],
+          'name':    addr['name'],
         },
         'theme': {'color': '#0D0D0D'},
       });
-      // payment result arrives via event handlers — do NOT call mutating(false) here
+      // payment result arrives asynchronously via _handlePaymentSuccess
     } catch (e) {
       mutating(false);
-      Get.snackbar('Checkout Failed', e.toString(),
-          snackPosition: SnackPosition.BOTTOM, duration: const Duration(seconds: 4));
+      final cleanMsg = e.toString()
+          .replaceAll('Exception: ', '')
+          .replaceAll('InvalidInputException: ', '')
+          .replaceAll('FatchDataException: ', '');
+      Get.snackbar(
+        'Order Failed',
+        cleanMsg,
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: const Color(0xFFE53935),
+        colorText: Colors.white,
+        duration: const Duration(seconds: 5),
+      );
     }
   }
 
   String formatPrice(dynamic value) {
     if (value == null) return '₹0';
-    return '₹${value.toString()}';
+    if (value is String && value.startsWith('₹')) return value;
+    final numVal = double.tryParse(value.toString().replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0;
+    return '₹${NumberFormat.decimalPattern('en_IN').format(numVal.round())}';
   }
 
   String lineImage(Map<String, dynamic> item) {

@@ -5,6 +5,7 @@ import 'package:tobeque/view/checkout/checkout_screen.dart';
 import 'package:tobeque/view/prodduct_details/product_detail_binding.dart';
 import 'package:tobeque/view/wishlist/wish_button.dart';
 import 'package:tobeque/view/wishlist/wishlist_screen.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -116,17 +117,7 @@ if (items.isEmpty) {
 
             const SizedBox(height: 22),
 
-            // Suggestions (only show if you have any)
-            if (controller.popularNotInCart.isNotEmpty) ...[
-              const Padding(
-                padding: EdgeInsets.fromLTRB(16, 0, 16, 10),
-                child: Text(
-                  'You might be interested in',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
-                ),
-              ),
-              SuggestStrip(items: controller.popularNotInCart),
-            ],
+
           ],
         ),
       ),
@@ -339,16 +330,7 @@ if (items.isEmpty) {
                     const _PromoCodeRow(),
                     const Divider(height: 1),
           
-                    // -------- recommendations ----------
-                    const Padding(
-                      padding: EdgeInsets.fromLTRB(16, 18, 16, 10),
-                      child: Text(
-                        'You might be interested in',
-                        style:
-                            TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
-                      ),
-                    ),
-                   SuggestStrip(items: controller.popularNotInCart),
+
                   ],
                 ),
               ),
@@ -544,15 +526,65 @@ class _PromoCodeRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-      leading: const Icon(Icons.auto_awesome, color: Colors.black87),
-      title: const Text('Promotional code'),
-      trailing: TextButton(
-        onPressed: () {
-          // open add-coupon flow
-        },
-        child: const Text('At checkout'),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF5F5F5),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFFE0E0E0)),
+            ),
+            child: const Icon(
+              Icons.confirmation_number_outlined,
+              color: Colors.black87,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: const [
+                Text(
+                  'Promotional code',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13.5,
+                    color: Colors.black87,
+                  ),
+                ),
+                SizedBox(height: 2),
+                Text(
+                  'Coupons can be applied at checkout',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Colors.black54,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          OutlinedButton(
+            onPressed: () => Get.to(() => const CheckoutScreen()),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.black,
+              side: const BorderSide(color: Colors.black54),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: const Text(
+              'At checkout',
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 11,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -621,7 +653,13 @@ class SuggestStrip extends GetView<CartController> {
                         color: const Color(0xfff3f3f3),
                         child: img.isEmpty
                             ? const SizedBox.shrink()
-                            : Image.network(img, fit: BoxFit.cover),
+                            : CachedNetworkImage(
+                                imageUrl: img,
+                                fit: BoxFit.cover,
+                                memCacheWidth: 300,
+                                placeholder: (_, __) => const SizedBox.shrink(),
+                                errorWidget: (_, __, ___) => const SizedBox.shrink(),
+                              ),
                       ),
                     ),
                   ),
@@ -783,7 +821,13 @@ class _CartImage extends StatelessWidget {
           decoration: const BoxDecoration(color: Color(0xfff2f2f2)),
           child: (imageUrl == null || imageUrl!.isEmpty)
               ? const SizedBox.expand()
-              : Image.network(imageUrl!, fit: BoxFit.cover),
+              : CachedNetworkImage(
+                  imageUrl: imageUrl!,
+                  fit: BoxFit.cover,
+                  memCacheWidth: 300,
+                  placeholder: (_, __) => const SizedBox.expand(),
+                  errorWidget: (_, __, ___) => const SizedBox.expand(),
+                ),
         ),
       ),
     );

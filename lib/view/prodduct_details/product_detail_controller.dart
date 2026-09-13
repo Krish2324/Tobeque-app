@@ -8,6 +8,7 @@ import 'package:tobeque/data/network/network_api_sarvices.dart';
 import 'package:tobeque/view/prodduct_details/product_api_repo.dart';
 import 'package:tobeque/view/cart/cart_events.dart';
 import 'package:tobeque/view/cart/cart_service.dart';
+import 'package:tobeque/view/checkout/checkout_screen.dart';
 import 'package:tobeque/constants/api_constants.dart';
  // for CartBadgeController.refreshNow()
 
@@ -479,6 +480,34 @@ class ProductDetailController extends GetxController {
       quantity: qty.value.clamp(1, 999),
       attributes: attrs,
     );
+  }
+
+  /// Direct Buy Now: validates, adds to cart, and navigates directly to Checkout
+  Future<void> buyNow(BuildContext context) async {
+    final attrs = _currentAttributes();
+    final p = product.value;
+
+    if (p != null && (p['type']?.toString() == 'variable')) {
+      if (_needsAttr('pa_size') && !attrs.containsKey('pa_size')) {
+        _toast(context, 'Please select a size');
+        return;
+      }
+      if (_needsAttr('pa_color') && !attrs.containsKey('pa_color')) {
+        _toast(context, 'Please select a color');
+        return;
+      }
+    }
+
+    final success = await addToCart(
+      context: context,
+      productId: productId,
+      quantity: qty.value.clamp(1, 999),
+      attributes: attrs,
+    );
+
+    if (success && context.mounted) {
+      Get.to(() => const CheckoutScreen());
+    }
   }
 
   Future<bool> addToCart({

@@ -3,7 +3,8 @@ import 'dart:convert';
 import 'dart:math';
 import 'package:tobeque/constants/api_constants.dart';
 import 'package:dio/dio.dart';
-import 'package:get/get.dart';
+import 'package:get/get.dart' hide FormData, MultipartFile;
+import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Your site base
@@ -69,11 +70,41 @@ class AuthController extends GetxController {
   final loggedIn  = false.obs;
   final error     = RxnString();
 
+  // Full user profile data map
+  final userProfileData = <String, dynamic>{}.obs;
+
   // simple profile fields the UI uses
   String _name = '';
   String _email = '';
-  String get displayName => _name;
-  String get email       => _email;
+  String get displayName {
+    final fn = userProfileData['firstName']?.toString() ?? '';
+    final ln = userProfileData['lastName']?.toString() ?? '';
+    final full = '$fn $ln'.trim();
+    if (full.isNotEmpty) return full;
+    if (_name.isNotEmpty) return _name;
+    final ph = userProfileData['phone']?.toString() ?? '';
+    if (ph.isNotEmpty) return ph;
+    return 'User';
+  }
+  String get email => (userProfileData['email']?.toString() ?? '').isNotEmpty
+      ? userProfileData['email'].toString()
+      : _email;
+
+  String get phone => userProfileData['phone']?.toString() ?? '';
+  String get firstName => userProfileData['firstName']?.toString() ?? '';
+  String get lastName => userProfileData['lastName']?.toString() ?? '';
+  String get gender => userProfileData['gender']?.toString() ?? '';
+  String get profilePhoto => userProfileData['profilePhoto']?.toString() ?? '';
+
+  String get address => userProfileData['address']?.toString() ?? '';
+  String get city => userProfileData['city']?.toString() ?? '';
+  String get state => userProfileData['state']?.toString() ?? '';
+  String get zipCode => userProfileData['zipCode']?.toString() ?? '';
+
+  String get shippingAddress => userProfileData['shippingAddress']?.toString() ?? '';
+  String get shippingCity => userProfileData['shippingCity']?.toString() ?? '';
+  String get shippingState => userProfileData['shippingState']?.toString() ?? '';
+  String get shippingZipCode => userProfileData['shippingZipCode']?.toString() ?? '';
 
   // addresses stored locally
   Map<String, dynamic> _billing  = {};
@@ -87,6 +118,117 @@ class AuthController extends GetxController {
   Future<void> onInit() async {
     super.onInit();
     await _restore();
+  }
+
+  /* ------------------------------------------------------------------------
+   * FETCH USER PROFILE (backend sync)
+   * --------------------------------------------------------------------- */
+  Future<void> fetchUserProfile() async {
+    if (_token == null || _token!.isEmpty) return;
+    try {
+      final res = await dio.get(
+        '${ApiConstant.apiBase}/user-auth/profile',
+        options: Options(headers: {'Authorization': 'Bearer $_token'}),
+      );
+      if (res.data is Map && res.data['user'] != null) {
+        final u = Map<String, dynamic>.from(res.data['user'] as Map);
+        userProfileData.value = u;
+        final fn = (u['firstName'] ?? '').toString();
+        final ln = (u['lastName'] ?? '').toString();
+        _name = '$fn $ln'.trim();
+        _email = (u['email'] ?? '').toString();
+
+        final sp = await SharedPreferences.getInstance();
+        if (_name.isNotEmpty) await sp.setString(_Keys.name, _name);
+        if (_email.isNotEmpty) await sp.setString(_Keys.email, _email);
+      }
+    } catch (e) {
+      print('fetchUserProfile error: $e');
+    }
+  }
+
+  /* ------------------------------------------------------------------------
+   * UPDATE USER PROFILE
+   * --------------------------------------------------------------------- */
+  Future<bool> updateUserProfile(Map<String, dynamic> payload) async {
+    if (_token == null || _token!.isEmpty) return false;
+    loading.value = true;
+    error.value = null;
+    try {
+      final res = await dio.put(
+        '${ApiConstant.apiBase}/user-auth/profile',
+        data: payload,
+        options: Options(headers: {'Authorization': 'Bearer $_token'}),
+      );
+      if (res.data is Map && res.data['user'] != null) {
+        final u = Map<String, dynamic>.from(res.data['user'] as Map);
+        userProfileData.value = u;
+        final fn = (u['firstName'] ?? '').toString();
+        final ln = (u['lastName'] ?? '').toString();
+        _name = '$fn $ln'.trim();
+        _email = (u['email'] ?? '').toString();
+
+        final sp = await SharedPreferences.getInstance();
+        if (_name.isNotEmpty) await sp.setString(_Keys.name, _name);
+        if (_email.isNotEmpty) await sp.setString(_Keys.email, _email);
+        return true;
+      }
+      return false;
+    } on DioException catch (e) {
+      error.value = _prettyError(e) ?? 'Could not update profile';
+      return false;
+    } catch (e) {
+      error.value = e.toString();
+      return false;
+    } finally {
+      loading.value = false;
+    }
+  }
+
+  /* ------------------------------------------------------------------------
+   * UPLOAD PROFILE PHOTO
+   * --------------------------------------------------------------------- */
+  Future<bool> uploadProfilePhoto(String filePath) async {
+    if (_token == null || _token!.isEmpty) return false;
+    loading.value = true;
+    error.value = null;
+    try {
+      final formData = FormData.fromMap({
+        'photo': await MultipartFile.fromFile(filePath),
+      });
+      final res = await dio.post(
+        '${ApiConstant.apiBase}/user-auth/profile/photo',
+        data: formData,
+        options: Options(headers: {'Authorization': 'Bearer $_token'}),
+      );
+      if (res.data is Map && res.data['user'] != null) {
+        final u = Map<String, dynamic>.from(res.data['user'] as Map);
+        userProfileData.value = u;
+        return true;
+      }
+      return false;
+    } on DioException catch (e) {
+      error.value = _prettyError(e) ?? 'Failed to upload photo';
+      return false;
+    } catch (e) {
+      error.value = e.toString();
+      return false;
+    } finally {
+      loading.value = false;
+    }
+  }
+
+  Future<bool> pickAndUploadProfilePhoto(ImageSource source) async {
+    try {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(source: source, maxWidth: 1024, maxHeight: 1024, imageQuality: 85);
+      if (picked != null) {
+        return await uploadProfilePhoto(picked.path);
+      }
+    } catch (e) {
+      error.value = 'Failed to pick image: $e';
+    }
+    return false;
   }
 
   /* ------------------------------------------------------------------------
@@ -122,13 +264,20 @@ class AuthController extends GetxController {
       final user = data['user'];
       if (token != null && token.isNotEmpty) {
         _token = token;
-        _name = (user is Map ? (user['name'] ?? user['firstName'] ?? '') : '').toString();
-        _email = (user is Map ? (user['email'] ?? '') : '').toString();
+        if (user is Map) {
+          userProfileData.value = Map<String, dynamic>.from(user);
+          final fn = (user['firstName'] ?? '').toString();
+          final ln = (user['lastName'] ?? '').toString();
+          _name = '$fn $ln'.trim();
+          if (_name.isEmpty) _name = (user['name'] ?? '').toString();
+          _email = (user['email'] ?? '').toString();
+        }
         final sp = await SharedPreferences.getInstance();
         await sp.setString(_Keys.token, token);
         await sp.setString(_Keys.name, _name);
         await sp.setString(_Keys.email, _email);
         loggedIn.value = true;
+        fetchUserProfile();
       } else {
         error.value = 'OTP verification failed. Please try again.';
       }
@@ -483,6 +632,7 @@ class AuthController extends GetxController {
   Future<void> logout() async {
     _token = null;
     loggedIn.value = false;
+    userProfileData.clear();
     final sp = await SharedPreferences.getInstance();
     await sp.remove(_Keys.token);
     await sp.remove(_Keys.name);
@@ -490,20 +640,21 @@ class AuthController extends GetxController {
   }
 
   /* ------------------------------ Persistence ----------------------------- */
-Future<void> _restore() async {
-  final sp = await SharedPreferences.getInstance();
-  _token = sp.getString(_Keys.token);
-  _name  = sp.getString(_Keys.name)  ?? '';
-  _email = sp.getString(_Keys.email) ?? '';
-  final b = sp.getString(_Keys.billing);
-  final s = sp.getString(_Keys.shipping);
-  if (b != null) _billing  = json.decode(b) as Map<String, dynamic>;
-  if (s != null) _shipping = json.decode(s) as Map<String, dynamic>;
+  Future<void> _restore() async {
+    final sp = await SharedPreferences.getInstance();
+    _token = sp.getString(_Keys.token);
+    _name  = sp.getString(_Keys.name)  ?? '';
+    _email = sp.getString(_Keys.email) ?? '';
+    final b = sp.getString(_Keys.billing);
+    final s = sp.getString(_Keys.shipping);
+    if (b != null) _billing  = json.decode(b) as Map<String, dynamic>;
+    if (s != null) _shipping = json.decode(s) as Map<String, dynamic>;
 
-  // ✅ Previously: ... && stay;
-  //    Now: token alone is enough to restore the session.
-  loggedIn.value = _token != null && _token!.isNotEmpty;
-}
+    loggedIn.value = _token != null && _token!.isNotEmpty;
+    if (loggedIn.value) {
+      fetchUserProfile();
+    }
+  }
   /* --------------------------------- Utils -------------------------------- */
 
   /// Generic error pretty-printer (strips simple HTML returned by WP)

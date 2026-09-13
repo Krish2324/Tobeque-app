@@ -37,7 +37,7 @@ class LocalCartItem {
 
   factory LocalCartItem.fromJson(Map<String, dynamic> m) => LocalCartItem(
     cartId: (m['cartId'] ?? '').toString(),
-    productId: (m['productId'] ?? m['id'] ?? '').toString(),
+    productId: (m['productId'] ?? m['id'] ?? m['_id'] ?? '').toString(),
     name: (m['name'] ?? '').toString(),
     price: m['price'],
     image: m['image']?.toString(),

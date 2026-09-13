@@ -141,6 +141,7 @@ class AddressController extends GetxController {
       };
 
       await net.putApi(payload, ApiConstant.userProfile);
+      await auth.fetchUserProfile();
 
       Get.snackbar('Saved', isBilling ? 'Billing address updated' : 'Shipping address updated',
           snackPosition: SnackPosition.BOTTOM, duration: const Duration(seconds: 2));

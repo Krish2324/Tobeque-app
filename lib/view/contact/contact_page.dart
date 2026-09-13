@@ -28,6 +28,40 @@ class _ContactPageState extends State<ContactPage> {
 
   bool _loading = false;
   bool _sent    = false;
+  bool _fetchingSettings = true;
+
+  String _email = 'care@tobeque.com';
+  String _phone = '+91 84470 00200';
+  String _whatsapp = '+918447000200';
+  String _officeAddress = '';
+  String _businessHours = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchSettings();
+  }
+
+  Future<void> _fetchSettings() async {
+    try {
+      final dio = DioClient.build();
+      final res = await dio.get('${ApiConstant.apiBase}/contact/settings');
+      if (res.data is Map && res.data['data'] != null) {
+        final data = res.data['data'] as Map;
+        setState(() {
+          if ((data['email'] ?? '').toString().isNotEmpty) _email = data['email'].toString();
+          if ((data['phone'] ?? '').toString().isNotEmpty) _phone = data['phone'].toString();
+          if ((data['whatsapp'] ?? '').toString().isNotEmpty) _whatsapp = data['whatsapp'].toString();
+          if ((data['officeAddress'] ?? '').toString().isNotEmpty) _officeAddress = data['officeAddress'].toString();
+          if ((data['businessHours'] ?? '').toString().isNotEmpty) _businessHours = data['businessHours'].toString();
+        });
+      }
+    } catch (_) {
+      // Fallback to default branding info if API call fails
+    } finally {
+      if (mounted) setState(() => _fetchingSettings = false);
+    }
+  }
 
   @override
   void dispose() {
@@ -43,7 +77,7 @@ class _ContactPageState extends State<ContactPage> {
     setState(() => _loading = true);
     try {
       final dio = DioClient.build();
-      await dio.post(ApiConstant.contact, data: {
+      await dio.post('${ApiConstant.apiBase}/contact/submit', data: {
         'name':    _nameCtrl.text.trim(),
         'email':   _emailCtrl.text.trim(),
         'phone':   _phoneCtrl.text.trim(),
@@ -108,6 +142,12 @@ class _ContactPageState extends State<ContactPage> {
         phoneFocus: _phoneFocus,
         msgFocus: _msgFocus,
         loading: _loading,
+        fetchingSettings: _fetchingSettings,
+        email: _email,
+        phone: _phone,
+        whatsapp: _whatsapp,
+        officeAddress: _officeAddress,
+        businessHours: _businessHours,
         onSubmit: _submit,
       ),
     );
@@ -119,13 +159,16 @@ class _FormView extends StatelessWidget {
     required this.formKey, required this.nameCtrl, required this.emailCtrl,
     required this.phoneCtrl, required this.msgCtrl, required this.nameFocus,
     required this.emailFocus, required this.phoneFocus, required this.msgFocus,
-    required this.loading, required this.onSubmit,
+    required this.loading, required this.fetchingSettings, required this.email,
+    required this.phone, required this.whatsapp, required this.officeAddress,
+    required this.businessHours, required this.onSubmit,
   });
 
   final GlobalKey<FormState> formKey;
   final TextEditingController nameCtrl, emailCtrl, phoneCtrl, msgCtrl;
   final FocusNode nameFocus, emailFocus, phoneFocus, msgFocus;
-  final bool loading;
+  final bool loading, fetchingSettings;
+  final String email, phone, whatsapp, officeAddress, businessHours;
   final VoidCallback onSubmit;
 
   @override
@@ -149,12 +192,37 @@ class _FormView extends StatelessWidget {
             ),
             const SizedBox(height: 28),
 
-            // Quick contact info
-            _ContactInfoRow(icon: Icons.email_outlined, label: 'Email', value: 'support@tobeque.com'),
-            const SizedBox(height: 10),
-            _ContactInfoRow(icon: Icons.phone_outlined, label: 'WhatsApp', value: '+91 XXXXX XXXXX'),
-            const SizedBox(height: 28),
+            // Dynamic contact info from admin
+            if (fetchingSettings)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 12),
+                child: SizedBox(
+                  width: 20, height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black87),
+                ),
+              )
+            else ...[
+              if (email.isNotEmpty)
+                _ContactInfoRow(icon: Icons.email_outlined, label: 'EMAIL', value: email),
+              if (phone.isNotEmpty || whatsapp.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                _ContactInfoRow(
+                  icon: Icons.phone_outlined,
+                  label: 'WHATSAPP / PHONE',
+                  value: whatsapp.isNotEmpty ? whatsapp : phone,
+                ),
+              ],
+              if (officeAddress.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                _ContactInfoRow(icon: Icons.location_on_outlined, label: 'OFFICE ADDRESS', value: officeAddress),
+              ],
+              if (businessHours.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                _ContactInfoRow(icon: Icons.access_time, label: 'BUSINESS HOURS', value: businessHours),
+              ],
+            ],
 
+            const SizedBox(height: 28),
             const Divider(height: 1, color: Color(0xFFEEEEEE)),
             const SizedBox(height: 28),
 
@@ -322,6 +390,7 @@ class _ContactInfoRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
           width: 36,
@@ -330,12 +399,15 @@ class _ContactInfoRow extends StatelessWidget {
           child: Icon(icon, size: 16, color: const Color(0xFF0D0D0D)),
         ),
         const SizedBox(width: 12),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(label, style: const TextStyle(fontSize: 10, color: Color(0xFF9E9E9E), letterSpacing: 1)),
-            Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF0D0D0D))),
-          ],
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: const TextStyle(fontSize: 10, color: Color(0xFF9E9E9E), letterSpacing: 1)),
+              const SizedBox(height: 2),
+              Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF0D0D0D), height: 1.4)),
+            ],
+          ),
         ),
       ],
     );

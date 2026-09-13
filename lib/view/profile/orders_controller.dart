@@ -1,7 +1,6 @@
 import 'package:tobeque/constants/api_constants.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
-
 import 'package:tobeque/data/network/network_api_sarvices.dart';
 
 class OrdersController extends GetxController {
@@ -18,62 +17,6 @@ class OrdersController extends GetxController {
     fetchOrders();
   }
 
-  void onCancelOrder(Map<String, dynamic> order) {
-    final id = order['_id'] ?? order['id'] ?? order['orderId'] ?? order['number'];
-    Get.defaultDialog(
-      title: "Cancel Order",
-      middleText: "Are you sure you want to cancel order #$id?",
-      textConfirm: "Yes, Cancel",
-      textCancel: "No",
-      onConfirm: () {
-        cancelOrderApi(id.toString());
-        Get.back();
-      },
-    );
-  }
-
-  void onReturnOrder(Map<String, dynamic> order) {
-    final id = order['_id'] ?? order['id'] ?? order['orderId'] ?? order['number'];
-    Get.defaultDialog(
-      title: "Return Order",
-      middleText: "Do you want to initiate a return for order #$id?",
-      textConfirm: "Yes, Return",
-      textCancel: "No",
-      onConfirm: () {
-        returnOrderApi(id.toString());
-        Get.back();
-      },
-    );
-  }
-
-  Future<void> cancelOrderApi(String orderId) async {
-    try {
-      loading(true);
-      await _net.putApi({'status': 'cancelled'}, '${ApiConstant.userOrders}/$orderId');
-      fetchOrders();
-      Get.snackbar('Order Cancelled', 'Order has been cancelled.');
-    } catch (e) {
-      error.value = e.toString();
-      Get.snackbar('Error', error.value ?? 'Cancel failed');
-    } finally {
-      loading(false);
-    }
-  }
-
-  Future<void> returnOrderApi(String orderId) async {
-    try {
-      loading(true);
-      await _net.postApi({'orderId': orderId, 'reason': 'Customer requested return'}, 'refund-requests');
-      fetchOrders();
-      Get.snackbar('Return Initiated', 'Return request submitted.');
-    } catch (e) {
-      error.value = e.toString();
-      Get.snackbar('Error', error.value ?? 'Return failed');
-    } finally {
-      loading(false);
-    }
-  }
-
   Future<void> fetchOrders() async {
     loading(true);
     error.value = null;
@@ -88,19 +31,18 @@ class OrdersController extends GetxController {
 
       final mapped = list.map((raw) {
         final m = Map<String, dynamic>.from(raw as Map);
-        final total = m['total'] ?? m['totalAmount'] ?? m['grandTotal'] ?? 0;
-        m['total_html'] = '₹$total';
+        final num totalNum = (m['totalAmount'] ?? m['total'] ?? m['grandTotal'] ?? 0) as num;
+        m['total_html'] = '₹${NumberFormat.decimalPattern('en_IN').format(totalNum.round())}';
         m['currency_symbol'] = '₹';
         m['date_created'] = (m['createdAt'] ?? m['date'] ?? '').toString();
+        m['display_id'] = (m['orderNumber'] ?? m['order_number'] ?? m['_id'] ?? m['id'] ?? '').toString();
+        m['id_str'] = (m['_id'] ?? m['id'] ?? m['orderNumber'] ?? '').toString();
         return m;
       }).toList();
 
       orders.assignAll(mapped);
-      if (orders.isEmpty) {
-        error.value = 'No orders found.';
-      }
     } catch (e) {
-      error.value = e.toString();
+      error.value = e.toString().replaceAll('Exception: ', '').replaceAll('FatchDataException: ', '');
     } finally {
       loading(false);
     }
@@ -122,16 +64,70 @@ class OrdersController extends GetxController {
       case 'shipped'   : return 'Shipped';
       case 'cancelled' : return 'Cancelled';
       case 'refunded'  : return 'Refunded';
-      default: return s ?? '—';
+      default: return s ?? 'Pending';
     }
   }
 
   String totalText(Map<String, dynamic> o) {
     final tHtml = (o['total_html'] ?? '').toString();
     if (tHtml.isNotEmpty) return tHtml;
-    final t = (o['total'] ?? o['totalAmount'] ?? '').toString();
+    final t = (o['totalAmount'] ?? o['total'] ?? '').toString();
     if (t.isNotEmpty) return '₹$t';
-    return '';
+    return '₹0';
+  }
+
+  void onCancelOrder(Map<String, dynamic> order) {
+    final id = order['display_id'] ?? order['id_str'] ?? '';
+    Get.defaultDialog(
+      title: "Cancel Order",
+      middleText: "Are you sure you want to cancel order #$id?",
+      textConfirm: "Yes, Cancel",
+      textCancel: "No",
+      onConfirm: () {
+        cancelOrderApi((order['id_str'] ?? id).toString());
+        Get.back();
+      },
+    );
+  }
+
+  void onReturnOrder(Map<String, dynamic> order) {
+    final id = order['display_id'] ?? order['id_str'] ?? '';
+    Get.defaultDialog(
+      title: "Return Order",
+      middleText: "Do you want to initiate a return for order #$id?",
+      textConfirm: "Yes, Return",
+      textCancel: "No",
+      onConfirm: () {
+        returnOrderApi((order['id_str'] ?? id).toString());
+        Get.back();
+      },
+    );
+  }
+
+  Future<void> cancelOrderApi(String orderId) async {
+    try {
+      loading(true);
+      await _net.putApi({'status': 'cancelled'}, '${ApiConstant.userOrders}/$orderId');
+      await fetchOrders();
+      Get.snackbar('Order Cancelled', 'Order has been cancelled successfully.');
+    } catch (e) {
+      Get.snackbar('Error', e.toString().replaceAll('Exception: ', ''));
+    } finally {
+      loading(false);
+    }
+  }
+
+  Future<void> returnOrderApi(String orderId) async {
+    try {
+      loading(true);
+      await _net.postApi({'orderId': orderId, 'reason': 'Customer requested return'}, 'refund-requests');
+      await fetchOrders();
+      Get.snackbar('Return Initiated', 'Return request submitted successfully.');
+    } catch (e) {
+      Get.snackbar('Error', e.toString().replaceAll('Exception: ', ''));
+    } finally {
+      loading(false);
+    }
   }
 }
 

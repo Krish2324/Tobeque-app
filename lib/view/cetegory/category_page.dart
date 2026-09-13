@@ -172,26 +172,7 @@ Future<void> _fetchSubcategories() async {
   if (mounted) setState(() {});
 }
 
-  // ---------- PRICE TEXT (used already) ----------
-  String _priceTextFrom(Map p) {
-    final m = (p['prices'] as Map?) ?? {};
-    final raw = m['price']?.toString();
-    if (raw != null && raw.isNotEmpty) {
-      final minor = (m['currency_minor_unit'] as int?) ?? 2;
-      final sym   = (m['currency_symbol']?.toString() ?? '₹');
-      final value = (double.tryParse(raw) ?? 0) / (pow10(minor));
-      final fmt   = NumberFormat.decimalPattern();
-      return '$sym${fmt.format(value)}';
-    }
-    // fallback decode from price_html
-    final html = (p['price_html'] ?? p['priceHtml'])?.toString() ?? '';
-    var s = html.replaceAll(RegExp(r'<[^>]*>'), '').replaceAll('&nbsp;', ' ');
-    s = s.replaceAllMapped(RegExp(r'&#(\d+);'), (m) => String.fromCharCode(int.parse(m[1]!)));
-    s = s.replaceFirstMapped(RegExp(r'^([^\d\s]+)(\d)'), (m) => '${m[1]} ${m[2]}');
-    return s.trim();
-  }
 
-  int pow10(int n) => List.filled(n, 0).fold(1, (a, _) => a * 10);
 
   // ---------- UI helpers ----------
   Color _colorFromName(String name) {
@@ -530,7 +511,7 @@ print(_all);
           tooltip: '',
           onPressed: () => Navigator.maybePop(context),
         ),
-        title: Text(widget.title,
+        title: Text(_currentTitle,
           style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
       ),
 // After SliverAppBar(...)
@@ -649,71 +630,37 @@ SliverToBoxAdapter(
                   crossAxisCount: grid == GridMode.two ? 2 : 3,
                   mainAxisSpacing: 12,
                   crossAxisSpacing: 12,
-                  childAspectRatio: grid == GridMode.two ? 0.55 : 0.60,
+                  childAspectRatio: grid == GridMode.two ? 0.51 : 0.55,
                 ),
-             // inside: SliverPadding -> SliverGrid -> delegate: SliverChildBuilderDelegate(
-delegate: SliverChildBuilderDelegate(
-  (context, i) {
-    final p   = products[i];
-    final id  = (p['_id'] ?? p['id'] ?? '').toString();
-    final name = (p['name'] as String? ?? '').trim();
-    final priceText = _priceTextFrom(p);
+                delegate: SliverChildBuilderDelegate(
+                  (context, i) {
+                    final p   = products[i];
+                    final id  = (p['_id'] ?? p['id'] ?? '').toString();
 
-    // 👇 use all product images (front/back/extra)
-    final sources = _imagesFromProduct(p);
+                    if (grid == GridMode.two) {
+                      return SmallTile(
+                        p: p,
+                        onTap: () => Get.to(
+                          () => ProductDetailPage(key: ValueKey(id), productId: id),
+                          binding: ProductDetailBinding(id),
+                        ),
+                      );
+                    }
 
-    final showMeta = grid != GridMode.three;
-
-    // 👇 choose swipe gallery for 2-col, single image for 3-col
-    Widget imageWidget;
-    if (grid == GridMode.two) {
-      imageWidget = SmallTile(
-        p: p,
-      );
-    } else {
-      imageWidget = ClipRRect(
-        borderRadius: BorderRadius.circular(2),
-        child: _ResilientImage(sources: sources, fit: BoxFit.cover),
-      );
-    }
-
-    return InkWell(
-      onTap: () => Get.to(
-        () => ProductDetailPage(key: ValueKey(id), productId: id),
-        binding: ProductDetailBinding(id),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          AspectRatio(
-            aspectRatio: grid == GridMode.two ? 2 / 3.4 : 1 / 1.5,
-            child: imageWidget,
-          ),
-          if (showMeta) ...[
-           // const SizedBox(height: 6),
-            // Text(
-            //   name,
-            //   maxLines: 2,
-            //   overflow: TextOverflow.ellipsis,
-            //   style: const TextStyle(
-            //     fontWeight: FontWeight.w700,
-            //     height: 1.1,
-            //     letterSpacing: .3,
-            //     fontSize: 12,
-            //   ),
-            // ),
-            // const SizedBox(height: 4),
-            // Text(priceText,
-            //     style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12)),
-          ],
-        ],
-      ),
-    );
-  },
-  childCount: products.length,
-),
-
-
+                    final sources = _imagesFromProduct(p);
+                    return InkWell(
+                      onTap: () => Get.to(
+                        () => ProductDetailPage(key: ValueKey(id), productId: id),
+                        binding: ProductDetailBinding(id),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(2),
+                        child: _ResilientImage(sources: sources, fit: BoxFit.cover),
+                      ),
+                    );
+                  },
+                  childCount: products.length,
+                ),
               ),
             ),
 
@@ -879,6 +826,25 @@ class SwipeGalleryState extends State<SwipeGallery> {
       ),
     );
   }
+}
+
+int pow10(int n) => List.filled(n, 0).fold(1, (a, _) => a * 10);
+
+String _priceTextFrom(Map p) {
+  final m = (p['prices'] as Map?) ?? {};
+  final raw = m['price']?.toString();
+  if (raw != null && raw.isNotEmpty) {
+    final minor = (m['currency_minor_unit'] as int?) ?? 2;
+    final sym   = (m['currency_symbol']?.toString() ?? '₹');
+    final value = (double.tryParse(raw) ?? 0) / (pow10(minor));
+    final fmt   = NumberFormat.decimalPattern();
+    return '$sym${fmt.format(value)}';
+  }
+  final html = (p['price_html'] ?? p['priceHtml'])?.toString() ?? '';
+  var s = html.replaceAll(RegExp(r'<[^>]*>'), '').replaceAll('&nbsp;', ' ');
+  s = s.replaceAllMapped(RegExp(r'&#(\d+);'), (m) => String.fromCharCode(int.parse(m[1]!)));
+  s = s.replaceFirstMapped(RegExp(r'^([^\d\s]+)(\d)'), (m) => '${m[1]} ${m[2]}');
+  return s.trim();
 }
 
 /* =============================== Tiles =============================== */
@@ -1063,16 +1029,16 @@ class SmallTile extends StatelessWidget {
         // Title (flexible, ellipsis)
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Column(
-              mainAxisAlignment: MainAxisAlignment.start,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SizedBox(
-                  width: MediaQuery.of(context).size.width/3.2,
-                  child: Text(
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
                     name,
-                    maxLines: 1,                    // set to 1 for tighter three-column mode
+                    maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       fontWeight: FontWeight.w600,
@@ -1081,31 +1047,30 @@ class SmallTile extends StatelessWidget {
                       fontSize: 12,
                     ),
                   ),
-                ),
-                   const SizedBox(height: 2),
-        
-        // Price
-        Text(
-          priceText,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            fontWeight: FontWeight.w900,
-            height: 1.2,
-            letterSpacing: .3,
-            fontSize: 12,
-          ),
-        ),
-              ],
+                  const SizedBox(height: 2),
+                  Text(
+                    priceText,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                      height: 1.2,
+                      letterSpacing: .3,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
             ),
-        WishButton(
-          id: (p['_id'] ?? p['id'] ?? '').toString(),
-          name: name,
-          image: firstImg,
-          size: 20,
-          activeColor: Colors.redAccent,
-          inactiveColor: Colors.black54,
-        ),  ],
+            WishButton(
+              id: (p['_id'] ?? p['id'] ?? '').toString(),
+              name: name,
+              image: firstImg,
+              size: 20,
+              activeColor: Colors.redAccent,
+              inactiveColor: Colors.black54,
+            ),
+          ],
         ),
     
      
@@ -1204,6 +1169,7 @@ class _ResilientImageState extends State<_ResilientImage> {
     return CachedNetworkImage(
       imageUrl: url,
       fit: widget.fit,
+      memCacheWidth: 450,
       placeholder: (ctx, _) => const ShimmerWave(
         period: Duration(milliseconds: 2200),
         direction: ShineDirection.diagonal,
@@ -1256,22 +1222,6 @@ class _ErrorState extends StatelessWidget {
 
 /* --------------------- formatting + images helpers --------------------- */
 
-String _priceTextFrom(Map<String, dynamic> p) {
-  final prices = p['prices'];
-  if (prices is Map && prices['price'] != null) {
-    final rawStr = prices['price'].toString(); // minor units
-    final currency = prices['currency_symbol']?.toString() ?? '₹';
-    final minor = double.tryParse(rawStr) ?? 0;
-    final major = minor / 100.0;
-    return '$currency${NumberFormat.decimalPattern().format(major)}';
-  }
-  final html = (p['price_html'] as String? ?? '')
-      .replaceAll(RegExp(r'<[^>]*>'), '')
-      .replaceAll('&nbsp;', ' ')
-      .trim();
-  return html.isEmpty ? '' : html;
-}
-
 String? _sanitizeUrl(String? u) {
   if (u == null || u.isEmpty) return null;
   var x = u.trim().replaceAll(' ', '%20');
@@ -1280,33 +1230,10 @@ String? _sanitizeUrl(String? u) {
   return x;
 }
 
-String _stableUnsplash(String seed) {
-  final s = seed.toLowerCase();
-  const map = {
-    'dresses':
-        'https://images.unsplash.com/photo-1520975916090-3105956dac38?w=1000&auto=format&fit=crop',
-    'fashion':
-        'https://images.unsplash.com/photo-1520975739545-0f2d321e3cde?w=1000&auto=format&fit=crop',
-    'bottom':
-        'https://images.unsplash.com/photo-1513364776144-60967b0f800f?w=1000&auto=format&fit=crop',
-    'sets':
-        'https://images.unsplash.com/photo-1503341455253-b2e723bb3dbb?w=1000&auto=format&fit=crop',
-    'top':
-        'https://images.unsplash.com/photo-1457972729786-0411a3b2b626?w=1000&auto=format&fit=crop',
-  };
-  return map[s] ??
-      'https://images.unsplash.com/photo-1512436991641-6745cdb1723f?w=1000&auto=format&fit=crop';
-}
-
-String _picsumSeed(String seed, {int w = 1000, int h = 1500}) =>
-    'https://picsum.photos/seed/${Uri.encodeComponent(seed)}/$w/$h';
-
 List<String> _imageCandidates({required String primary, required String seed}) {
   final list = <String>[];
   final p = _sanitizeUrl(primary);
-  if (p != null) list.add(p);
-  list.add(_stableUnsplash(seed));
-  list.add(_picsumSeed(seed));
+  if (p != null && p.isNotEmpty) list.add(p);
   return list;
 }
 

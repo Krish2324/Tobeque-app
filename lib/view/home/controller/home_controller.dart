@@ -67,7 +67,7 @@ class HomeController extends GetxController {
       final results = await Future.wait<dynamic>([
         repo.fetchHero(),
         repo.fetchCategories(perPage: 15),
-        repo.fetchBestSellers(perPage: 50),
+        repo.fetchBestSellers(perPage: 12),
         repo.fetchHeroVideoUrl(),
         repo.fetchOnSaleProducts(perPage: 15),
         repo.fetchHotRightNow(perPage: 10),

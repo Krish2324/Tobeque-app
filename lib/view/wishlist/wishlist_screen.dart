@@ -4,6 +4,7 @@ import 'package:tobeque/utills/html_decode.dart';
 import 'package:tobeque/view/cart/cart_controller.dart';
 import 'package:tobeque/view/prodduct_details/product_detail_controller.dart';
 import 'package:tobeque/view/prodduct_details/size_sheet.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -209,9 +210,13 @@ Future<void> _moveToBasket(BuildContext context) async {
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(0),
                 child: (item.image != null && item.image!.isNotEmpty)
-                    ? Image.network(item.image!, fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) =>
-                            const ColoredBox(color: Color(0xFFF2F2F2)))
+                    ? CachedNetworkImage(
+                        imageUrl: item.image!,
+                        fit: BoxFit.cover,
+                        memCacheWidth: 400,
+                        placeholder: (_, __) => const ColoredBox(color: Color(0xFFF2F2F2)),
+                        errorWidget: (_, __, ___) => const ColoredBox(color: Color(0xFFF2F2F2)),
+                      )
                     : const ColoredBox(color: Color(0xFFF2F2F2)),
               ),
             ),
@@ -344,7 +349,13 @@ class _SuggestTile extends GetView<CartController> {
                   color: const Color(0xfff3f3f3),
                   child: img.isEmpty
                       ? const SizedBox.shrink()
-                      : Image.network(img, fit: BoxFit.cover),
+                      : CachedNetworkImage(
+                          imageUrl: img,
+                          fit: BoxFit.cover,
+                          memCacheWidth: 400,
+                          placeholder: (_, __) => const SizedBox.shrink(),
+                          errorWidget: (_, __, ___) => const SizedBox.shrink(),
+                        ),
                 ),
               ),
             ),

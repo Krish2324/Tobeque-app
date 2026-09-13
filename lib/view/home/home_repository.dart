@@ -49,7 +49,25 @@ class HomeRepository {
   }
 
   Future<String?> fetchHeroVideoUrl() async {
-    return 'https://www.youtube.com/shorts/EmVHGtpCT2Y';
+    try {
+      final res = await _dio.get(ApiConstant.banners);
+      final data = res.data;
+      List list = [];
+      if (data is Map && data['banners'] is List) {
+        list = data['banners'];
+      } else if (data is List) {
+        list = data;
+      }
+      for (final b in list) {
+        if (b is Map) {
+          final u = (b['videoUrl'] ?? b['bannerLink'] ?? b['linkUrl'] ?? b['mobileImageUrl'] ?? b['imageUrl'] ?? '').toString();
+          if (u.contains('.mp4') || u.contains('youtube.com') || u.contains('youtu.be') || u.contains('.m3u8')) {
+            return ApiConstant.getImageUrl(u);
+          }
+        }
+      }
+    } catch (_) {}
+    return null;
   }
 
   Future<WpPageHero> fetchHero() async {

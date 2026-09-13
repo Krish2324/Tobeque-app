@@ -2,9 +2,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:dio/dio.dart';
-import 'package:tobeque/constants/api_constants.dart';
-import 'package:tobeque/services/shared_pref.dart';
 import 'profile_controller.dart';
 
 /// ─────────────────────────────────────────────────────────────────────────────
@@ -141,10 +138,18 @@ class _SignInScreenState extends State<SignInScreen> {
                                   return;
                                 }
                                 c.error.value = null;
-                                await c.sendOtp('+91$phone');
+                                final formattedPhone = '+91$phone';
+                                await c.sendOtp(formattedPhone);
                                 if (!mounted) return;
                                 if (c.error.value == null) {
-                                  _openOtpSheet(context, '+91$phone');
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('OTP sent to $formattedPhone'),
+                                      backgroundColor: Colors.black87,
+                                      duration: const Duration(seconds: 3),
+                                    ),
+                                  );
+                                  _openOtpSheet(context, formattedPhone);
                                 }
                               },
                         style: ElevatedButton.styleFrom(
@@ -228,6 +233,35 @@ class _OtpSheetState extends State<_OtpSheet> {
   bool _verifying = false;
   String? _error;
   bool _resending = false;
+  int _resendCountdown = 30;
+  bool _canResend = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _startResendTimer();
+  }
+
+  void _startResendTimer() {
+    setState(() {
+      _resendCountdown = 30;
+      _canResend = false;
+    });
+    Future.doWhile(() async {
+      await Future.delayed(const Duration(seconds: 1));
+      if (!mounted) return false;
+      if (_resendCountdown > 1) {
+        setState(() => _resendCountdown--);
+        return true;
+      } else {
+        setState(() {
+          _resendCountdown = 0;
+          _canResend = true;
+        });
+        return false;
+      }
+    });
+  }
 
   @override
   void dispose() {
@@ -238,7 +272,7 @@ class _OtpSheetState extends State<_OtpSheet> {
   Future<void> _verify() async {
     final otp = _otpCtrl.text.trim();
     if (otp.length < 4) {
-      setState(() => _error = 'Please enter the OTP sent to your phone');
+      setState(() => _error = 'Please enter the verification code');
       return;
     }
     setState(() { _verifying = true; _error = null; });
@@ -260,16 +294,16 @@ class _OtpSheetState extends State<_OtpSheet> {
   }
 
   Future<void> _resend() async {
+    if (!_canResend) return;
     setState(() { _resending = true; _error = null; });
     try {
-      final dio = Dio(BaseOptions(
-        headers: const {'Accept': 'application/json', 'Content-Type': 'application/json'},
-      ));
-      await dio.post(ApiConstant.sendOtp, data: {'phone': widget.phone});
+      final c = Get.find<AuthController>();
+      await c.sendOtp(widget.phone);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('OTP resent successfully!')),
         );
+        _startResendTimer();
       }
     } catch (e) {
       setState(() => _error = 'Could not resend OTP. Try again.');
@@ -335,7 +369,7 @@ class _OtpSheetState extends State<_OtpSheet> {
               decoration: InputDecoration(
                 counterText: '',
                 hintText: '------',
-                hintStyle: TextStyle(
+                hintStyle: const TextStyle(
                   letterSpacing: 8,
                   color: Colors.black26,
                   fontWeight: FontWeight.w700,
@@ -353,6 +387,7 @@ class _OtpSheetState extends State<_OtpSheet> {
                 contentPadding: const EdgeInsets.symmetric(vertical: 18),
               ),
               autofocus: true,
+              onFieldSubmitted: (_) => _verify(),
             ),
             const SizedBox(height: 8),
 
@@ -397,12 +432,17 @@ class _OtpSheetState extends State<_OtpSheet> {
                 children: [
                   const Text("Didn't receive the code? ", style: TextStyle(color: Colors.black54)),
                   GestureDetector(
-                    onTap: _resending ? null : _resend,
+                    onTap: (_canResend && !_resending) ? _resend : null,
                     child: Text(
-                      _resending ? 'Sending...' : 'Resend OTP',
-                      style: const TextStyle(
+                      _resending
+                          ? 'Sending...'
+                          : (_canResend
+                              ? 'Resend OTP'
+                              : 'Resend in ${_resendCountdown}s'),
+                      style: TextStyle(
                         fontWeight: FontWeight.w800,
-                        decoration: TextDecoration.underline,
+                        color: _canResend ? Colors.black : Colors.grey,
+                        decoration: _canResend ? TextDecoration.underline : TextDecoration.none,
                       ),
                     ),
                   ),
