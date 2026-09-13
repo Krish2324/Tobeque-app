@@ -128,7 +128,7 @@ class ProductDetailPage extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                   ],
-                  expandedHeight: MediaQuery.of(context).size.width * 1.0,
+                  expandedHeight: MediaQuery.of(context).size.height * 0.80,
                   flexibleSpace: FlexibleSpaceBar(
                     background: Stack(
                       fit: StackFit.expand,
@@ -914,6 +914,7 @@ class _FullScreenImageViewer extends StatefulWidget {
 class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
   late final PageController _pageCtrl;
   late int _currentIndex;
+  bool _isZoomed = false;
 
   @override
   void initState() {
@@ -928,125 +929,281 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
     super.dispose();
   }
 
+  void _onZoomChanged(bool isZoomed) {
+    if (_isZoomed != isZoomed) {
+      setState(() {
+        _isZoomed = isZoomed;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
       body: SafeArea(
-        child: GestureDetector(
-          onVerticalDragEnd: (details) {
-            if (details.primaryVelocity != null && details.primaryVelocity! > 150) {
-              Navigator.of(context).pop();
-            }
-          },
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              // Swipable + Zoomable Image Carousel
-              PageView.builder(
-                controller: _pageCtrl,
-                itemCount: widget.images.length,
-                onPageChanged: (index) {
-                  setState(() => _currentIndex = index);
-                },
-                itemBuilder: (context, i) {
-                  return InteractiveViewer(
-                    minScale: 0.8,
-                    maxScale: 4.0,
-                    child: CachedNetworkImage(
-                      imageUrl: widget.images[i],
-                      fit: BoxFit.contain,
-                      placeholder: (_, __) => const Center(
-                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                      ),
-                      errorWidget: (_, __, ___) => const Icon(
-                        Icons.broken_image_outlined,
-                        color: Colors.white54,
-                        size: 64,
-                      ),
-                    ),
-                  );
-                },
-              ),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            // Background dismiss tap detector
+            GestureDetector(
+              onTap: () {
+                if (!_isZoomed) {
+                  Navigator.of(context).pop();
+                }
+              },
+              child: Container(color: Colors.black),
+            ),
 
-              // Top Header Controls (Dismiss Button, Image Counter, Close)
-              Positioned(
-                top: 12,
-                left: 16,
-                right: 16,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    // Pull down / Dismiss Button
-                    GestureDetector(
+            // Swipable + Zoomable Image Carousel
+            PageView.builder(
+              controller: _pageCtrl,
+              physics: _isZoomed
+                  ? const NeverScrollableScrollPhysics()
+                  : const BouncingScrollPhysics(),
+              itemCount: widget.images.length,
+              onPageChanged: (index) {
+                setState(() {
+                  _currentIndex = index;
+                  _isZoomed = false;
+                });
+              },
+              itemBuilder: (context, i) {
+                return _ZoomableImageItem(
+                  key: ValueKey(widget.images[i]),
+                  imageUrl: widget.images[i],
+                  onZoomChanged: _onZoomChanged,
+                );
+              },
+            ),
+
+            // Top Header Bar (Dismiss / Back Button, Image Counter, Close X Button)
+            Positioned(
+              top: 10,
+              left: 14,
+              right: 14,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  // Back / Dismiss Button
+                  Material(
+                    color: Colors.transparent,
+                    child: InkWell(
                       onTap: () => Navigator.of(context).pop(),
+                      borderRadius: BorderRadius.circular(24),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(20),
+                          color: Colors.black.withOpacity(0.65),
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(color: Colors.white24, width: 1),
                         ),
                         child: const Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white, size: 20),
-                            SizedBox(width: 4),
+                            Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 14),
+                            SizedBox(width: 6),
                             Text(
                               'Dismiss',
-                              style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700),
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
                           ],
                         ),
                       ),
                     ),
+                  ),
 
-                    // Counter
-                    if (widget.images.length > 1)
-                      Text(
+                  // Counter Pill
+                  if (widget.images.length > 1)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.65),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: Colors.white24, width: 1),
+                      ),
+                      child: Text(
                         '${_currentIndex + 1} / ${widget.images.length}',
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 14,
+                          fontSize: 13,
                           fontWeight: FontWeight.w800,
                           letterSpacing: 1,
                         ),
                       ),
-
-                    // Close Icon Button
-                    IconButton(
-                      icon: const Icon(Icons.close, color: Colors.white, size: 26),
-                      onPressed: () => Navigator.of(context).pop(),
                     ),
-                  ],
-                ),
-              ),
 
-              // Bottom Swipe Down Hint
-              Positioned(
-                bottom: 20,
-                left: 0,
-                right: 0,
-                child: Center(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.6),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.swipe_down_rounded, color: Colors.white70, size: 16),
-                        SizedBox(width: 6),
-                        Text(
-                          'Swipe down to exit full screen',
-                          style: TextStyle(color: Colors.white70, fontSize: 11),
+                  // Prominent Close 'X' Circle Button
+                  Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () => Navigator.of(context).pop(),
+                      borderRadius: BorderRadius.circular(24),
+                      child: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.65),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white24, width: 1),
                         ),
-                      ],
+                        child: const Icon(Icons.close_rounded, color: Colors.white, size: 24),
+                      ),
                     ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Bottom Gesture Guide / Zoom Reset Button
+            Positioned(
+              bottom: 24,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.75),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.white24, width: 1),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _isZoomed ? Icons.zoom_out_map_rounded : Icons.pinch_outlined,
+                        color: Colors.white70,
+                        size: 16,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        _isZoomed
+                            ? 'Double-tap or pinch to reset zoom'
+                            : 'Pinch / double-tap to zoom • Tap Dismiss to exit',
+                        style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w600),
+                      ),
+                    ],
                   ),
                 ),
               ),
-            ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ZoomableImageItem extends StatefulWidget {
+  final String imageUrl;
+  final ValueChanged<bool> onZoomChanged;
+
+  const _ZoomableImageItem({
+    super.key,
+    required this.imageUrl,
+    required this.onZoomChanged,
+  });
+
+  @override
+  State<_ZoomableImageItem> createState() => _ZoomableImageItemState();
+}
+
+class _ZoomableImageItemState extends State<_ZoomableImageItem> with SingleTickerProviderStateMixin {
+  late TransformationController _transformationController;
+  TapDownDetails? _doubleTapDetails;
+  late AnimationController _animationController;
+  Animation<Matrix4>? _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _transformationController = TransformationController();
+    _transformationController.addListener(_onTransformationChanged);
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 250),
+    )..addListener(() {
+        if (_animation != null) {
+          _transformationController.value = _animation!.value;
+        }
+      });
+  }
+
+  void _onTransformationChanged() {
+    final scale = _transformationController.value.getMaxScaleOnAxis();
+    widget.onZoomChanged(scale > 1.05);
+  }
+
+  @override
+  void dispose() {
+    _transformationController.removeListener(_onTransformationChanged);
+    _transformationController.dispose();
+    _animationController.dispose();
+    super.dispose();
+  }
+
+  void _handleDoubleTapDown(TapDownDetails details) {
+    _doubleTapDetails = details;
+  }
+
+  void _handleDoubleTap() {
+    final position = _doubleTapDetails?.localPosition ?? Offset.zero;
+    final currentScale = _transformationController.value.getMaxScaleOnAxis();
+
+    final Matrix4 endMatrix;
+    if (currentScale > 1.05) {
+      endMatrix = Matrix4.identity();
+    } else {
+      const double targetScale = 2.5;
+      final x = -position.dx * (targetScale - 1);
+      final y = -position.dy * (targetScale - 1);
+
+      endMatrix = Matrix4.identity()
+        ..translate(x, y, 0.0)
+        ..scale(targetScale, targetScale, 1.0);
+    }
+
+    _animation = Matrix4Tween(
+      begin: _transformationController.value,
+      end: endMatrix,
+    ).animate(CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeOutCubic,
+    ));
+
+    _animationController.forward(from: 0);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return InteractiveViewer(
+      transformationController: _transformationController,
+      minScale: 1.0,
+      maxScale: 5.0,
+      clipBehavior: Clip.none,
+      panEnabled: true,
+      scaleEnabled: true,
+      child: GestureDetector(
+        onDoubleTapDown: _handleDoubleTapDown,
+        onDoubleTap: _handleDoubleTap,
+        child: Center(
+          child: CachedNetworkImage(
+            imageUrl: widget.imageUrl,
+            fit: BoxFit.contain,
+            placeholder: (_, __) => const Center(
+              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+            ),
+            errorWidget: (_, __, ___) => const Icon(
+              Icons.broken_image_outlined,
+              color: Colors.white54,
+              size: 64,
+            ),
           ),
         ),
       ),
@@ -1204,7 +1361,7 @@ class _PdpSkeletonLoader extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _ShimmerBox(width: w, height: w * 1.2, borderRadius: 0),
+          _ShimmerBox(width: w, height: MediaQuery.of(context).size.height * 0.80, borderRadius: 0),
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: Column(
