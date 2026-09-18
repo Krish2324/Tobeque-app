@@ -1,12 +1,10 @@
 import 'dart:math' as math;
-import 'package:tobeque/view/root/bage_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 
 import 'package:tobeque/data/network/network_api_sarvices.dart';
 import 'package:tobeque/view/prodduct_details/product_api_repo.dart';
-import 'package:tobeque/view/cart/cart_events.dart';
 import 'package:tobeque/view/cart/cart_service.dart';
 import 'package:tobeque/view/checkout/checkout_screen.dart';
 import 'package:tobeque/constants/api_constants.dart';
@@ -129,7 +127,7 @@ class ProductDetailController extends GetxController {
     final thumb = (p['thumbnail'] ?? p['thumbnailImage'] ?? p['featuredImage'] ?? p['image'])?.toString();
     if (thumb != null && thumb.trim().isNotEmpty) {
       final fullUrl = ApiConstant.getImageUrl(thumb.trim());
-      if (fullUrl != null && fullUrl.isNotEmpty) {
+      if (fullUrl.isNotEmpty) {
         allUrls.add(fullUrl);
       }
     }
@@ -140,7 +138,7 @@ class ProductDetailController extends GetxController {
         final url = (item['imageUrl'] ?? item['url'] ?? item['src'] ?? item['thumbnail'])?.toString();
         if (url != null && url.trim().isNotEmpty) {
           final fullUrl = ApiConstant.getImageUrl(url.trim());
-          if (fullUrl != null && fullUrl.isNotEmpty) {
+          if (fullUrl.isNotEmpty) {
             if (!allUrls.contains(fullUrl)) allUrls.add(fullUrl);
             
             if (currentSlug != null) {
@@ -155,7 +153,7 @@ class ProductDetailController extends GetxController {
         }
       } else if (item is String && item.trim().isNotEmpty) {
         final fullUrl = ApiConstant.getImageUrl(item.trim());
-        if (fullUrl != null && fullUrl.isNotEmpty && !allUrls.contains(fullUrl)) {
+        if (fullUrl.isNotEmpty && !allUrls.contains(fullUrl)) {
           allUrls.add(fullUrl);
         }
       }
@@ -167,7 +165,7 @@ class ProductDetailController extends GetxController {
         final url = (v['image'] ?? v['imageUrl'] ?? v['thumbnail'])?.toString();
         if (url != null && url.trim().isNotEmpty) {
            final fullUrl = ApiConstant.getImageUrl(url.trim());
-           if (fullUrl != null && fullUrl.isNotEmpty) {
+           if (fullUrl.isNotEmpty) {
              if (!allUrls.contains(fullUrl)) allUrls.add(fullUrl);
              
              if (currentSlug != null) {
@@ -366,56 +364,127 @@ class ProductDetailController extends GetxController {
     return const [];
   }
 
+  String? _parseImg(dynamic val) {
+    if (val == null) return null;
+    if (val is String) return val.trim().isNotEmpty ? val.trim() : null;
+    if (val is Map) {
+      final res = (val['url'] ?? val['src'] ?? val['imageUrl'] ?? val['path'] ?? val['image'])?.toString().trim();
+      return (res != null && res.isNotEmpty) ? res : null;
+    }
+    return null;
+  }
+
+  String? _findImgInMap(Map m) {
+    return _parseImg(m['image']) ??
+        _parseImg(m['texture']) ??
+        _parseImg(m['textureImage']) ??
+        _parseImg(m['imageUrl']) ??
+        _parseImg(m['photo']) ??
+        _parseImg(m['swatch']) ??
+        _parseImg(m['src']) ??
+        _parseImg(m['icon']);
+  }
+
   List<Map<String, String>> _extractColors(Map<String, dynamic> p) {
     final list = <Map<String, String>>[];
-    final seen = <String>{};
+    final mapBySlug = <String, Map<String, String>>{};
 
-    final cols = (p['colors'] as List?) ?? (p['colorSwatches'] as List?) ?? const [];
-    if (cols.isNotEmpty) {
-      for (final c in cols) {
-        final label = c is Map ? (c['name'] ?? c['color'])?.toString() : c.toString();
-        if (label != null && label.trim().isNotEmpty) {
-          final slug = label.trim().toLowerCase();
-          if (!seen.contains(slug)) {
-            seen.add(slug);
-            list.add({
-              'label': label.trim(),
-              'slug': slug,
-            });
-          }
-        }
+    void addOption(String label, String slug, [String? rawImg, String? hexColor]) {
+      if (label.trim().isEmpty) return;
+      final cleanSlug = slug.trim().toLowerCase();
+
+      String? fullImg;
+      if (rawImg != null && rawImg.trim().isNotEmpty) {
+        fullImg = ApiConstant.getImageUrl(rawImg.trim());
       }
-      if (list.isNotEmpty) return list;
+
+      if (mapBySlug.containsKey(cleanSlug)) {
+        final existing = mapBySlug[cleanSlug]!;
+        if ((existing['image'] == null || existing['image']!.isEmpty) && fullImg != null && fullImg.isNotEmpty) {
+          existing['image'] = fullImg;
+        }
+        if ((existing['color'] == null || existing['color']!.isEmpty) && hexColor != null && hexColor.trim().isNotEmpty) {
+          existing['color'] = hexColor.trim();
+        }
+        return;
+      }
+
+      final map = <String, String>{
+        'label': label.trim(),
+        'slug': cleanSlug,
+      };
+      if (fullImg != null && fullImg.isNotEmpty) {
+        map['image'] = fullImg;
+      }
+      if (hexColor != null && hexColor.trim().isNotEmpty) {
+        map['color'] = hexColor.trim();
+      }
+      mapBySlug[cleanSlug] = map;
+      list.add(map);
     }
 
+    // 1. First check rich colorSwatches / swatches (stores admin custom fabric/color images)
+    final swatches = (p['colorSwatches'] as List?) ?? (p['swatches'] as List?) ?? const [];
+    for (final s in swatches) {
+      if (s is Map) {
+        final label = (s['color'] ?? s['name'] ?? s['label'] ?? s['title'])?.toString();
+        final slug = (s['slug'] ?? label ?? '').toString();
+        final img = _findImgInMap(s);
+        final hex = (s['hex'] ?? s['code'] ?? s['colorCode'] ?? s['value'])?.toString();
+        if (label != null) addOption(label, slug, img, hex);
+      }
+    }
+
+    // 2. Direct colors list (strings or maps)
+    final cols = (p['colors'] as List?) ?? const [];
+    for (final c in cols) {
+      if (c is Map) {
+        final label = (c['name'] ?? c['color'] ?? c['label'] ?? c['title'])?.toString();
+        final slug = (c['slug'] ?? label ?? '').toString();
+        final img = _findImgInMap(c);
+        final hex = (c['hex'] ?? c['code'] ?? c['colorCode'] ?? c['value'])?.toString();
+        if (label != null) addOption(label, slug, img, hex);
+      } else if (c != null) {
+        addOption(c.toString(), c.toString());
+      }
+    }
+
+    // 3. Single color string
+    if (p['color'] is String && (p['color'] as String).trim().isNotEmpty) {
+      for (final splitted in (p['color'] as String).split(',')) {
+        addOption(splitted, splitted);
+      }
+    }
+
+    // 4. Images list with color tags
     final imgs = (p['images'] as List?) ?? const [];
     for (final item in imgs) {
       if (item is Map && item['color'] != null) {
         final c = item['color'].toString().trim();
-        if (c.isNotEmpty) {
-          final slug = c.toLowerCase();
-          if (!seen.contains(slug)) {
-            seen.add(slug);
-            list.add({
-              'label': c,
-              'slug': slug,
-            });
-          }
-        }
+        final img = _findImgInMap(item);
+        addOption(c, c, img);
       }
     }
-    if (list.isNotEmpty) return list;
 
+    // 5. Variants / Variations
+    final vars = (p['variants'] as List?) ?? (p['variations'] as List?) ?? const [];
+    for (final v in vars) {
+      if (v is Map) {
+        final c = (v['color'] ?? v['attributes']?['color'] ?? v['attributes']?['pa_color'])?.toString();
+        final img = _findImgInMap(v);
+        final hex = (v['colorCode'] ?? v['hex'])?.toString();
+        if (c != null) addOption(c, c, img, hex);
+      }
+    }
+
+    // 6. Attributes
     final fromAttrs = _extractOptions(p, wantsSlug: 'pa_color', nameContains: 'color');
     for (final e in fromAttrs) {
-      final slug = (e['slug'] ?? '').toLowerCase();
-      if (slug.isNotEmpty && !seen.contains(slug)) {
-        seen.add(slug);
-        list.add({
-          'label': e['label'] ?? '',
-          'slug': slug,
-        });
-      }
+      final label = e['label'] ?? '';
+      final slug = e['slug'] ?? label;
+      final img = e['image'];
+      final hex = e['color'];
+      addOption(label, slug, img, hex);
     }
 
     return list;
@@ -442,17 +511,30 @@ class ProductDetailController extends GetxController {
       }
     }
     if (target == null) return const [];
-    final terms = (target['terms'] as List?) ?? const [];
+    final terms = (target['terms'] as List?) ?? (target['options'] as List?) ?? const [];
     return terms.map<Map<String, String>>((t) {
-      final tm = (t as Map);
-      final label = tm['name']?.toString() ?? '';
-      final slug  = (tm['slug']?.toString() ?? label.toLowerCase()).trim();
-      return {'label': label, 'slug': slug};
-    }).where((e) => e['label']!.isNotEmpty && e['slug']!.isNotEmpty).toList();
+      if (t is Map) {
+        final label = (t['name'] ?? t['label'] ?? t['value'])?.toString() ?? '';
+        final slug  = (t['slug']?.toString() ?? label.toLowerCase()).trim();
+        final img   = _findImgInMap(t);
+        final hex   = (t['hex'] ?? t['color'] ?? t['colorCode'] ?? t['code'] ?? t['value'])?.toString();
+        final map = <String, String>{'label': label, 'slug': slug};
+        if (img != null && img.trim().isNotEmpty) {
+          final full = ApiConstant.getImageUrl(img.trim());
+          if (full.isNotEmpty) map['image'] = full;
+        }
+        if (hex != null && hex.trim().isNotEmpty) map['color'] = hex.trim();
+        return map;
+      } else if (t != null) {
+        final str = t.toString().trim();
+        return {'label': str, 'slug': str.toLowerCase()};
+      }
+      return <String, String>{};
+    }).where((m) => m.isNotEmpty).toList();
   }
 
   // ---------- variation resolution ----------
-  int? _findVariationId(Map<String, dynamic> p, Map<String, String> selected) {
+  int? findVariationId(Map<String, dynamic> p, Map<String, String> selected) {
     final varsRaw = (p['variations'] as List?) ?? const [];
     if (varsRaw.isEmpty) return null;
     if (varsRaw.first is int) return null; // server will match via attrs

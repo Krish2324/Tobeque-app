@@ -236,6 +236,7 @@ class HomeRepository {
           priceHtml: '₹${_cleanPrice(p['price'] ?? p['regularPrice'] ?? 0)}',
           image: primary,
           images: imageList,
+          rawMap: (p as Map).cast<String, dynamic>(),
         );
       }).toList();
       _cacheMap[key] = result;
@@ -353,6 +354,7 @@ class HomeRepository {
           image: primary,
           images: imageList,
           originalPrice: regularPrice != salePrice ? '₹$regularPrice' : null,
+          rawMap: (p as Map).cast<String, dynamic>(),
         );
       }).toList();
       _cacheMap[key] = result;
@@ -429,6 +431,7 @@ class HomeRepository {
           hotMedia: hotMedia != null && hotMedia.isNotEmpty ? ApiConstant.getImageUrl(hotMedia) : null,
           categorySlug: catSlug,
           slug: slug,
+          rawMap: (p as Map).cast<String, dynamic>(),
         );
       }).toList();
       _cacheMap[key] = result;

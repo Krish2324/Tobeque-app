@@ -971,7 +971,7 @@ class _ProductCardState extends State<_ProductCard> {
             ),
           ),
 
-          // ── NAME + PRICE + SWATCH DOT ─────────────────────────
+          // ── NAME + PRICE + SWATCH DOTS ────────────────────────
           const SizedBox(height: 4),
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
@@ -1004,16 +1004,43 @@ class _ProductCardState extends State<_ProductCard> {
                   ],
                 ),
               ),
-              Container(
-                width: 9,
-                height: 9,
-                margin: const EdgeInsets.only(left: 4),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.black26, width: 1),
-                  color: guessColor(name) ?? const Color(0xFF5B6B7C),
-                ),
-              ),
+              Builder(builder: (_) {
+                final colorSwatches = extractColorsFromProductMap(p.rawMap ?? p.toJson());
+                if (colorSwatches.isEmpty) return const SizedBox.shrink();
+
+                return Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: colorSwatches.take(3).map((swatchData) {
+                    final bool hasImage = swatchData.image != null && swatchData.image!.isNotEmpty;
+                    final Color swatchColor = swatchData.color;
+                    final bool isLight = swatchColor == const Color(0xFFFFFFFF) || swatchColor == const Color(0xFFFAFAFA);
+
+                    return Container(
+                      margin: const EdgeInsets.only(left: 3),
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: isLight ? Colors.black38 : Colors.black12,
+                          width: 1,
+                        ),
+                        color: hasImage ? Colors.white : swatchColor,
+                      ),
+                      child: ClipOval(
+                        child: hasImage
+                            ? CachedNetworkImage(
+                                imageUrl: swatchData.image!,
+                                fit: BoxFit.cover,
+                                placeholder: (_, __) => ColoredBox(color: swatchColor),
+                                errorWidget: (_, __, ___) => ColoredBox(color: swatchColor),
+                              )
+                            : null,
+                      ),
+                    );
+                  }).toList(),
+                );
+              }),
             ],
           ),
         ],

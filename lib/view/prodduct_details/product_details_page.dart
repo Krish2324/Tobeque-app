@@ -84,7 +84,6 @@ class ProductDetailPage extends StatelessWidget {
 
       final rawDesc = (p['fullDescription'] ?? p['description'] ?? p['shortDescription'] ?? '').toString();
       final desc = rawDesc.replaceAll(RegExp(r'<[^>]*>'), '').replaceAll('&nbsp;', ' ').trim();
-      final catName = (p['category'] is Map ? p['category']['name'] : null)?.toString() ?? 'TOBEQUE';
 
       return Scaffold(
         backgroundColor: Colors.white,
@@ -102,7 +101,7 @@ class ProductDetailPage extends StatelessWidget {
                   leading: Padding(
                     padding: const EdgeInsets.all(8.0),
                     child: CircleAvatar(
-                      backgroundColor: Colors.white.withOpacity(0.85),
+                      backgroundColor: Colors.white.withValues(alpha: 0.85),
                       child: IconButton(
                         icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black, size: 18),
                         onPressed: Get.back,
@@ -113,7 +112,7 @@ class ProductDetailPage extends StatelessWidget {
                     Padding(
                       padding: const EdgeInsets.all(8.0),
                       child: CircleAvatar(
-                        backgroundColor: Colors.white.withOpacity(0.85),
+                        backgroundColor: Colors.white.withValues(alpha: 0.85),
                         child: Stack(
                           alignment: Alignment.center,
                           children: [
@@ -197,7 +196,7 @@ class ProductDetailPage extends StatelessWidget {
                             right: 14,
                             bottom: 14,
                             child: CircleAvatar(
-                              backgroundColor: Colors.white.withOpacity(0.9),
+                              backgroundColor: Colors.white.withValues(alpha: 0.9),
                               radius: 18,
                               child: IconButton(
                                 padding: EdgeInsets.zero,
@@ -212,7 +211,7 @@ class ProductDetailPage extends StatelessWidget {
                           left: 14,
                           bottom: 14,
                           child: CircleAvatar(
-                            backgroundColor: Colors.white.withOpacity(0.9),
+                            backgroundColor: Colors.white.withValues(alpha: 0.9),
                             radius: 20,
                             child: WishButton(
                               id: (p['_id'] ?? p['id'] ?? '').toString(),
@@ -232,34 +231,22 @@ class ProductDetailPage extends StatelessWidget {
                 // ── 2. PRODUCT DETAILS SECTION ─────────────────────────
                 SliverToBoxAdapter(
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Category Tag
-                        Text(
-                          catName.toUpperCase(),
-                          style: const TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 1.5,
-                            color: Colors.black45,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-
                         // Product Name
                         Text(
                           HtmlDecode.text(name).toUpperCase(),
                           style: const TextStyle(
-                            fontSize: 15,
+                            fontSize: 14,
                             fontWeight: FontWeight.w600,
-                            letterSpacing: -0.3,
+                            letterSpacing: 0.2,
                             height: 1.25,
                             color: Colors.black87,
                           ),
                         ),
-                        const SizedBox(height: 10),
+                        const SizedBox(height: 4),
 
                         // Price & Discount Row
                         Row(
@@ -269,9 +256,10 @@ class ProductDetailPage extends StatelessWidget {
                             Text(
                               price,
                               style: const TextStyle(
-                                fontSize: 17,
+                                fontSize: 16,
                                 fontWeight: FontWeight.w700,
-                                color: Colors.black87,
+                                color: Colors.black,
+                                letterSpacing: -0.2,
                               ),
                             ),
                             if (regularPrice.isNotEmpty) ...[
@@ -307,10 +295,10 @@ class ProductDetailPage extends StatelessWidget {
                             ],
                           ],
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 2),
                         const Text(
                           'Inclusive of all taxes',
-                          style: TextStyle(fontSize: 11, color: Colors.black45),
+                          style: TextStyle(fontSize: 11, color: Colors.black45, fontWeight: FontWeight.w400),
                         ),
 
                         const SizedBox(height: 20),
@@ -319,9 +307,60 @@ class ProductDetailPage extends StatelessWidget {
 
                         // ── 3. ON-PAGE SIZE SELECTOR ───────────────────────
                         if (c.sizeOptions.isNotEmpty) ...[
-                          const Text(
-                            'SIZE',
-                            style: TextStyle(fontSize: 12, letterSpacing: 1.2, fontWeight: FontWeight.w700, color: Colors.black54),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Row(
+                                children: [
+                                  const Text(
+                                    'SELECT SIZE',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      letterSpacing: 1.2,
+                                      fontWeight: FontWeight.w700,
+                                      color: Color(0xFF6B7280),
+                                    ),
+                                  ),
+                                  Obx(() {
+                                    final label = c.sizeLabel.value;
+                                    if (label == null || label.isEmpty) return const SizedBox.shrink();
+                                    return Text(
+                                      ' — ${label.toUpperCase()}',
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        letterSpacing: 1.0,
+                                        fontWeight: FontWeight.w800,
+                                        color: Colors.black,
+                                      ),
+                                    );
+                                  }),
+                                ],
+                              ),
+                              InkWell(
+                                onTap: () => _showSizeGuideModal(context),
+                                borderRadius: BorderRadius.circular(4),
+                                child: const Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 2, horizontal: 4),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.straighten_rounded, size: 14, color: Colors.black87),
+                                      SizedBox(width: 4),
+                                      Text(
+                                        'SIZE GUIDE',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w700,
+                                          letterSpacing: 0.8,
+                                          decoration: TextDecoration.underline,
+                                          color: Colors.black87,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 12),
                           Obx(() {
@@ -331,29 +370,26 @@ class ProductDetailPage extends StatelessWidget {
                               runSpacing: 8,
                               children: c.sizeOptions.map((opt) {
                                 final slug = opt['slug'] ?? '';
-                                final label = opt['label'] ?? slug.toUpperCase();
+                                final label = (opt['label'] ?? slug).toString().toUpperCase();
                                 final isSelected = selectedSlug == slug;
                                 final inStock = opt['inStock'] != 'false';
 
-                                return GestureDetector(
+                                return InkWell(
                                   onTap: inStock ? () { c.sizeSlug.value = slug; c.sizeLabel.value = label; } : null,
-                                  child: AnimatedContainer(
-                                    duration: const Duration(milliseconds: 150),
-                                    width: 44,
-                                    height: 44,
-                                    alignment: Alignment.center,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                                     decoration: BoxDecoration(
                                       color: isSelected ? Colors.black : Colors.white,
                                       border: Border.all(
-                                        color: isSelected ? Colors.black : (inStock ? const Color(0xFFE0E0E0) : const Color(0xFFEEEEEE)),
-                                        width: 1,
+                                        color: isSelected ? Colors.black : const Color(0xFFDDDDDD),
                                       ),
+                                      borderRadius: BorderRadius.circular(4),
                                     ),
                                     child: Text(
                                       label,
                                       style: TextStyle(
                                         fontSize: 12,
-                                        fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                                        fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
                                         color: isSelected ? Colors.white : (inStock ? Colors.black87 : Colors.black26),
                                         decoration: inStock ? null : TextDecoration.lineThrough,
                                       ),
@@ -372,14 +408,14 @@ class ProductDetailPage extends StatelessWidget {
                             children: [
                               const Text(
                                 'COLOUR',
-                                style: TextStyle(fontSize: 12, letterSpacing: 1.2, fontWeight: FontWeight.w700, color: Colors.black54),
+                                style: TextStyle(fontSize: 11, letterSpacing: 1.2, fontWeight: FontWeight.w700, color: Color(0xFF6B7280)),
                               ),
                               Obx(() {
                                 final label = c.colorLabel.value;
                                 if (label == null || label.isEmpty) return const SizedBox.shrink();
                                 return Text(
                                   ' — ${label.toUpperCase()}',
-                                  style: const TextStyle(fontSize: 12, letterSpacing: 1.2, fontWeight: FontWeight.w800, color: Colors.black),
+                                  style: const TextStyle(fontSize: 11, letterSpacing: 1.0, fontWeight: FontWeight.w800, color: Colors.black),
                                 );
                               }),
                             ],
@@ -388,32 +424,78 @@ class ProductDetailPage extends StatelessWidget {
                           Obx(() {
                             final selectedSlug = c.colorSlug.value ?? '';
                             return Wrap(
-                              spacing: 12,
+                              spacing: 14,
                               runSpacing: 12,
                               children: c.colorOptions.map((opt) {
                                 final slug = opt['slug'] ?? '';
                                 final label = opt['label'] ?? slug;
+                                final imgUrl = opt['image'];
+                                final hexStr = opt['color'] ?? opt['hex'];
                                 final isSelected = selectedSlug == slug;
-                                final swatchColor = guessColor(label) ?? guessColor(slug) ?? Colors.transparent;
+
+                                final swatchColor = (hexStr != null && hexStr.isNotEmpty)
+                                    ? (guessColor(hexStr) ?? guessColor(label) ?? Colors.transparent)
+                                    : (guessColor(label) ?? guessColor(slug) ?? Colors.transparent);
+
+                                final isWhiteOrLight = swatchColor == const Color(0xFFFFFFFF) ||
+                                    swatchColor == const Color(0xFFFAFAFA) ||
+                                    swatchColor == const Color(0xFFFFFFF0) ||
+                                    swatchColor == const Color(0xFFF6F4E8);
 
                                 return GestureDetector(
                                   onTap: () { c.colorSlug.value = slug; c.colorLabel.value = label; },
-                                  child: Container(
-                                    width: 32,
-                                    height: 32,
-                                    padding: const EdgeInsets.all(2),
+                                  child: AnimatedContainer(
+                                    duration: const Duration(milliseconds: 200),
+                                    width: 36,
+                                    height: 36,
                                     decoration: BoxDecoration(
                                       shape: BoxShape.circle,
+                                      color: (imgUrl == null || imgUrl.isEmpty) ? swatchColor : Colors.white,
                                       border: Border.all(
-                                        color: isSelected ? Colors.black : Colors.transparent,
-                                        width: 1.5,
+                                        color: isSelected 
+                                            ? Colors.black 
+                                            : (isWhiteOrLight ? const Color(0xFFE5E7EB) : Colors.transparent),
+                                        width: isSelected ? 2.5 : 1,
                                       ),
+                                      boxShadow: isSelected
+                                          ? [
+                                              BoxShadow(
+                                                color: Colors.black.withValues(alpha: 0.15),
+                                                blurRadius: 4,
+                                                offset: const Offset(0, 2),
+                                              ),
+                                            ]
+                                          : null,
                                     ),
-                                    child: Container(
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        color: swatchColor,
-                                        border: Border.all(color: Colors.black12, width: 1),
+                                    child: ClipOval(
+                                      child: Stack(
+                                        fit: StackFit.expand,
+                                        children: [
+                                          if (imgUrl != null && imgUrl.isNotEmpty)
+                                            CachedNetworkImage(
+                                              imageUrl: imgUrl,
+                                              fit: BoxFit.cover,
+                                              placeholder: (_, __) => ColoredBox(color: swatchColor),
+                                              errorWidget: (_, __, ___) => ColoredBox(color: swatchColor),
+                                            ),
+                                          if (isSelected)
+                                            Center(
+                                              child: Container(
+                                                padding: const EdgeInsets.all(2),
+                                                decoration: BoxDecoration(
+                                                  color: (imgUrl != null || isWhiteOrLight)
+                                                      ? Colors.black.withValues(alpha: 0.6)
+                                                      : Colors.transparent,
+                                                  shape: BoxShape.circle,
+                                                ),
+                                                child: const Icon(
+                                                  Icons.check,
+                                                  size: 16,
+                                                  color: Colors.white,
+                                                ),
+                                              ),
+                                            ),
+                                        ],
                                       ),
                                     ),
                                   ),
@@ -871,7 +953,7 @@ class ProductDetailPage extends StatelessWidget {
     Navigator.of(context).push(
       PageRouteBuilder(
         opaque: false,
-        barrierColor: Colors.black.withOpacity(0.92),
+        barrierColor: Colors.black.withValues(alpha: 0.92),
         pageBuilder: (context, animation, secondaryAnimation) {
           return FadeTransition(
             opacity: animation,
@@ -1352,7 +1434,7 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
                       width: 40,
                       height: 40,
                       decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.6),
+                        color: Colors.black.withValues(alpha: 0.6),
                         shape: BoxShape.circle,
                         border: Border.all(color: Colors.white30, width: 1),
                       ),
@@ -1458,7 +1540,9 @@ class _ZoomableImageItemState extends State<_ZoomableImageItem> with SingleTicke
       final y = -position.dy * (targetScale - 1);
 
       endMatrix = Matrix4.identity()
+        // ignore: deprecated_member_use
         ..translate(x, y, 0.0)
+        // ignore: deprecated_member_use
         ..scale(targetScale, targetScale, 1.0);
     }
 
@@ -1513,25 +1597,136 @@ class _ZoomableImageItemState extends State<_ZoomableImageItem> with SingleTicke
   }
 }
 
-class _FeatureBadge extends StatelessWidget {
-  const _FeatureBadge({required this.icon, required this.label});
-  final IconData icon;
-  final String label;
+class _ColorSwatchData {
+  final String name;
+  final String? image;
+  final Color color;
 
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Icon(icon, size: 20, color: Colors.black87),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Colors.black87),
-        ),
-      ],
-    );
+  const _ColorSwatchData({required this.name, this.image, required this.color});
+}
+
+List<_ColorSwatchData> _extractColorsFromProductMap(Map<String, dynamic> p) {
+  final List<_ColorSwatchData> result = [];
+  final Map<String, _ColorSwatchData> mapBySlug = {};
+
+  void addOrUpdateSwatch(String nameStr, [String? rawImg, String? hexColor]) {
+    final cleanName = nameStr.trim();
+    if (cleanName.isEmpty) return;
+    final slug = cleanName.toLowerCase();
+
+    String? fullImg;
+    if (rawImg != null && rawImg.trim().isNotEmpty) {
+      fullImg = ApiConstant.getImageUrl(rawImg.trim());
+    }
+
+    Color colorVal = Colors.transparent;
+    if (hexColor != null && hexColor.trim().isNotEmpty) {
+      colorVal = guessColor(hexColor) ?? guessColor(cleanName) ?? const Color(0xFF9CA3AF);
+    } else {
+      colorVal = guessColor(cleanName) ?? const Color(0xFF9CA3AF);
+    }
+
+    if (mapBySlug.containsKey(slug)) {
+      final existing = mapBySlug[slug]!;
+      if ((existing.image == null || existing.image!.isEmpty) && fullImg != null && fullImg.isNotEmpty) {
+        final updated = _ColorSwatchData(name: existing.name, image: fullImg, color: existing.color);
+        mapBySlug[slug] = updated;
+        final idx = result.indexWhere((e) => e.name.trim().toLowerCase() == slug);
+        if (idx != -1) result[idx] = updated;
+      }
+      return;
+    }
+
+    final swatch = _ColorSwatchData(name: cleanName, image: fullImg, color: colorVal);
+    mapBySlug[slug] = swatch;
+    result.add(swatch);
   }
+
+  // 1. Check colorSwatches / swatches FIRST (stores admin custom fabric/color images)
+  final swatches = (p['colorSwatches'] as List?) ?? (p['swatches'] as List?) ?? const [];
+  for (final s in swatches) {
+    if (s is Map) {
+      final name = (s['color'] ?? s['name'] ?? s['label'] ?? s['title'])?.toString();
+      final img = (s['image'] ?? s['imageUrl'] ?? s['photo'] ?? s['swatch'] ?? s['src'] ?? s['icon'])?.toString();
+      final hex = (s['hex'] ?? s['code'] ?? s['colorCode'] ?? s['value'])?.toString();
+      if (name != null) addOrUpdateSwatch(name, img, hex);
+    }
+  }
+
+  // 2. Direct colors list (strings or maps)
+  final cols = (p['colors'] as List?) ?? const [];
+  for (final c in cols) {
+    if (c is Map) {
+      final name = (c['name'] ?? c['color'] ?? c['label'] ?? c['title'])?.toString();
+      final img = (c['image'] ?? c['imageUrl'] ?? c['photo'] ?? c['swatch'] ?? c['src'] ?? c['icon'])?.toString();
+      final hex = (c['hex'] ?? c['code'] ?? c['colorCode'] ?? c['value'])?.toString();
+      if (name != null) addOrUpdateSwatch(name, img, hex);
+    } else if (c != null) {
+      addOrUpdateSwatch(c.toString());
+    }
+  }
+
+  // 3. Single color field
+  if (p['color'] is String && (p['color'] as String).trim().isNotEmpty) {
+    for (final splitted in (p['color'] as String).split(',')) {
+      addOrUpdateSwatch(splitted);
+    }
+  }
+
+  // 4. Images list with color tags
+  final imgs = (p['images'] as List?) ?? const [];
+  for (final item in imgs) {
+    if (item is Map && item['color'] != null) {
+      final c = item['color'].toString().trim();
+      final img = (item['imageUrl'] ?? item['url'] ?? item['src'] ?? item['image'])?.toString();
+      addOrUpdateSwatch(c, img);
+    }
+  }
+
+  // 5. Attributes
+  final attrs = (p['attributes'] as List?) ?? const [];
+  for (final a in attrs.whereType<Map>()) {
+    final key = ((a['taxonomy'] ?? a['name'])?.toString() ?? '').toLowerCase();
+    if (key.contains('color') || key == 'pa_color' || key.contains('colour')) {
+      final terms = a['terms'] ?? a['options'] ?? a['options_json'] ?? a['value'];
+      if (terms is List) {
+        for (final t in terms) {
+          if (t is Map) {
+            final val = (t['name'] ?? t['value'] ?? t['label'] ?? '').toString();
+            final img = (t['image'] ?? t['imageUrl'] ?? t['photo'] ?? t['swatch'] ?? t['src'] ?? t['icon'])?.toString();
+            final hex = (t['hex'] ?? t['code'] ?? t['colorCode'] ?? t['value'] ?? t['color'])?.toString();
+            addOrUpdateSwatch(val, img, hex);
+          } else if (t != null) {
+            addOrUpdateSwatch(t.toString());
+          }
+        }
+      } else if (terms is String && terms.trim().isNotEmpty) {
+        for (final s in terms.split(',')) {
+          addOrUpdateSwatch(s);
+        }
+      }
+    }
+  }
+
+  // 6. Variants
+  final vars = (p['variants'] as List?) ?? (p['variations'] as List?) ?? const [];
+  for (final v in vars.whereType<Map>()) {
+    final c = (v['color'] ?? v['attributes']?['color'] ?? v['attributes']?['pa_color'])?.toString();
+    final img = (v['image'] ?? v['imageUrl'] ?? v['thumbnail'])?.toString();
+    final hex = (v['colorCode'] ?? v['hex'])?.toString();
+    if (c != null) addOrUpdateSwatch(c, img, hex);
+  }
+
+  // 7. Title fallback
+  if (result.isEmpty) {
+    final name = (p['name'] ?? p['title'] ?? '').toString();
+    final g = guessColor(name);
+    if (g != null) {
+      addOrUpdateSwatch(name);
+    }
+  }
+
+  return result;
 }
 
 class _RelatedProductCard extends StatelessWidget {
@@ -1558,6 +1753,8 @@ class _RelatedProductCard extends StatelessWidget {
     final priceVal = p['price'] ?? p['discountPrice'] ?? p['regularPrice'];
     final priceStr = priceVal != null ? '₹$priceVal' : '';
 
+    final extractedColors = _extractColorsFromProductMap(p);
+
     return GestureDetector(
       onTap: onTap,
       child: Column(
@@ -1570,7 +1767,7 @@ class _RelatedProductCard extends StatelessWidget {
                 imageUrl: fullImg,
                 fit: BoxFit.cover,
                 width: double.infinity,
-                placeholder: (_, __) => _ShimmerBox(),
+                placeholder: (_, __) => const _ShimmerBox(),
                 errorWidget: (_, __, ___) => Container(color: const Color(0xFFF5F5F5)),
               ),
             ),
@@ -1591,15 +1788,49 @@ class _RelatedProductCard extends StatelessWidget {
                   style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.black87),
                 ),
               const Spacer(),
-              Container(
-                width: 12,
-                height: 12,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.black12, width: 1),
-                  color: guessColor(name) ?? const Color(0xFF5B6B7C),
+              if (extractedColors.isNotEmpty)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: extractedColors.take(3).map((swatchData) {
+                    final bool hasImage = swatchData.image != null && swatchData.image!.isNotEmpty;
+                    final Color swatchColor = swatchData.color;
+                    final bool isLight = swatchColor == const Color(0xFFFFFFFF) || swatchColor == const Color(0xFFFAFAFA);
+
+                    return Container(
+                      margin: const EdgeInsets.only(left: 3),
+                      width: 12,
+                      height: 12,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: isLight ? Colors.black38 : Colors.black12, 
+                          width: 1,
+                        ),
+                        color: hasImage ? Colors.white : swatchColor,
+                      ),
+                      child: ClipOval(
+                        child: hasImage
+                            ? CachedNetworkImage(
+                                imageUrl: swatchData.image!,
+                                fit: BoxFit.cover,
+                                placeholder: (_, __) => ColoredBox(color: swatchColor),
+                                errorWidget: (_, __, ___) => ColoredBox(color: swatchColor),
+                              )
+                            : null,
+                      ),
+                    );
+                  }).toList(),
+                )
+              else
+                Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.black12, width: 1),
+                    color: guessColor(name) ?? const Color(0xFF9CA3AF),
+                  ),
                 ),
-              ),
             ],
           ),
         ],
@@ -1608,149 +1839,7 @@ class _RelatedProductCard extends StatelessWidget {
   }
 }
 
-/// Opens a full-screen image lightbox with swipe support and pinch-to-zoom.
-void _openImageLightbox(BuildContext context, List<String> images, int initialIndex) {
-  final PageController pageCtrl = PageController(initialPage: initialIndex);
 
-  Navigator.of(context).push(
-    PageRouteBuilder(
-      opaque: false,
-      barrierDismissible: true,
-      barrierColor: Colors.black,
-      fullscreenDialog: true,
-      pageBuilder: (ctx, animation, _) {
-        return FadeTransition(
-          opacity: animation,
-          child: _ImageLightboxPage(
-            images: images,
-            initialIndex: initialIndex,
-            pageController: pageCtrl,
-          ),
-        );
-      },
-    ),
-  );
-}
-
-class _ImageLightboxPage extends StatefulWidget {
-  const _ImageLightboxPage({
-    required this.images,
-    required this.initialIndex,
-    required this.pageController,
-  });
-  final List<String> images;
-  final int initialIndex;
-  final PageController pageController;
-
-  @override
-  State<_ImageLightboxPage> createState() => _ImageLightboxPageState();
-}
-
-class _ImageLightboxPageState extends State<_ImageLightboxPage> {
-  late int _current;
-
-  @override
-  void initState() {
-    super.initState();
-    _current = widget.initialIndex;
-  }
-
-  @override
-  void dispose() {
-    widget.pageController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.close, color: Colors.white, size: 28),
-          onPressed: () => Navigator.pop(context),
-        ),
-        actions: [
-          if (widget.images.length > 1)
-            Padding(
-              padding: const EdgeInsets.only(right: 16, top: 12),
-              child: Text(
-                '${_current + 1} / ${widget.images.length}',
-                style: const TextStyle(
-                  color: Colors.white70,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-        ],
-      ),
-      body: GestureDetector(
-        onTap: () => Navigator.pop(context),
-        child: PageView.builder(
-          controller: widget.pageController,
-          itemCount: widget.images.length,
-          onPageChanged: (i) => setState(() => _current = i),
-          itemBuilder: (ctx, i) {
-            return GestureDetector(
-              onTap: () {}, // prevent tap-to-close on image itself
-              child: InteractiveViewer(
-                minScale: 0.5,
-                maxScale: 5.0,
-                child: Center(
-                  child: SizedBox(
-                    height: MediaQuery.of(context).size.height * 0.90,
-                    width: MediaQuery.of(context).size.width,
-                    child: Hero(
-                      tag: 'product_image_${widget.images[i]}',
-                      child: CachedNetworkImage(
-                        imageUrl: widget.images[i],
-                        fit: BoxFit.cover,
-                        placeholder: (_, __) => const Center(
-                          child: CircularProgressIndicator(color: Colors.white54, strokeWidth: 2),
-                        ),
-                        errorWidget: (_, __, ___) => const Icon(
-                          Icons.broken_image_outlined,
-                          color: Colors.white30,
-                          size: 56,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            );
-          },
-        ),
-      ),
-      bottomNavigationBar: widget.images.length > 1
-          ? Container(
-              color: Colors.black,
-              padding: const EdgeInsets.only(bottom: 24, top: 12),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(widget.images.length, (i) {
-                  final active = i == _current;
-                  return AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    margin: const EdgeInsets.symmetric(horizontal: 4),
-                    width: active ? 18 : 6,
-                    height: 6,
-                    decoration: BoxDecoration(
-                      color: active ? Colors.white : Colors.white38,
-                      borderRadius: BorderRadius.circular(3),
-                    ),
-                  );
-                }),
-              ),
-            )
-          : null,
-    );
-  }
-}
 
 class _CartBadgeDot extends StatelessWidget {
   @override

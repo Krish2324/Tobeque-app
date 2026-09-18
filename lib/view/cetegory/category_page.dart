@@ -9,6 +9,7 @@ import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:tobeque/constants/api_constants.dart';
+import 'package:tobeque/componant/helper.dart';
 import '../home/home_repository.dart';
 
 enum SortMode { popular, priceLowHigh, priceHighLow }
@@ -1370,8 +1371,147 @@ Color _parseColorSwatch(String name) {
 
 
 
+class _ColorSwatchData {
+  final String name;
+  final String? image;
+  final Color color;
+
+  const _ColorSwatchData({required this.name, this.image, required this.color});
+}
+
+List<_ColorSwatchData> _extractColorsFromProductMap(Map<String, dynamic> p) {
+  final List<_ColorSwatchData> result = [];
+  final Map<String, _ColorSwatchData> mapBySlug = {};
+
+  void addOrUpdateSwatch(String nameStr, [String? rawImg, String? hexColor]) {
+    final cleanName = nameStr.trim();
+    if (cleanName.isEmpty) return;
+    final slug = cleanName.toLowerCase();
+
+    String? fullImg;
+    if (rawImg != null && rawImg.trim().isNotEmpty) {
+      fullImg = ApiConstant.getImageUrl(rawImg.trim());
+    }
+
+    Color colorVal = Colors.transparent;
+    if (hexColor != null && hexColor.trim().isNotEmpty) {
+      colorVal = guessColor(hexColor) ?? guessColor(cleanName) ?? const Color(0xFF9CA3AF);
+    } else {
+      colorVal = guessColor(cleanName) ?? const Color(0xFF9CA3AF);
+    }
+
+    if (mapBySlug.containsKey(slug)) {
+      final existing = mapBySlug[slug]!;
+      if ((existing.image == null || existing.image!.isEmpty) && fullImg != null && fullImg.isNotEmpty) {
+        final updated = _ColorSwatchData(name: existing.name, image: fullImg, color: existing.color);
+        mapBySlug[slug] = updated;
+        final idx = result.indexWhere((e) => e.name.trim().toLowerCase() == slug);
+        if (idx != -1) result[idx] = updated;
+      }
+      return;
+    }
+
+    final swatch = _ColorSwatchData(name: cleanName, image: fullImg, color: colorVal);
+    mapBySlug[slug] = swatch;
+    result.add(swatch);
+  }
+
+  // 1. Check colorSwatches / swatches FIRST (stores admin custom fabric/color images)
+  final swatches = (p['colorSwatches'] as List?) ?? (p['swatches'] as List?) ?? const [];
+  for (final s in swatches) {
+    if (s is Map) {
+      final name = (s['color'] ?? s['name'] ?? s['label'] ?? s['title'])?.toString();
+      final img = (s['image'] ?? s['imageUrl'] ?? s['photo'] ?? s['swatch'] ?? s['src'] ?? s['icon'])?.toString();
+      final hex = (s['hex'] ?? s['code'] ?? s['colorCode'] ?? s['value'])?.toString();
+      if (name != null) addOrUpdateSwatch(name, img, hex);
+    }
+  }
+
+  // 2. Direct colors list (strings or maps)
+  final cols = (p['colors'] as List?) ?? const [];
+  for (final c in cols) {
+    if (c is Map) {
+      final name = (c['name'] ?? c['color'] ?? c['label'] ?? c['title'])?.toString();
+      final img = (c['image'] ?? c['imageUrl'] ?? c['photo'] ?? c['swatch'] ?? c['src'] ?? c['icon'])?.toString();
+      final hex = (c['hex'] ?? c['code'] ?? c['colorCode'] ?? c['value'])?.toString();
+      if (name != null) addOrUpdateSwatch(name, img, hex);
+    } else if (c != null) {
+      addOrUpdateSwatch(c.toString());
+    }
+  }
+
+  // 3. Single color field
+  if (p['color'] is String && (p['color'] as String).trim().isNotEmpty) {
+    for (final splitted in (p['color'] as String).split(',')) {
+      addOrUpdateSwatch(splitted);
+    }
+  }
+
+  // 4. Images list with color tags
+  final imgs = (p['images'] as List?) ?? const [];
+  for (final item in imgs) {
+    if (item is Map && item['color'] != null) {
+      final c = item['color'].toString().trim();
+      final img = (item['imageUrl'] ?? item['url'] ?? item['src'] ?? item['image'])?.toString();
+      addOrUpdateSwatch(c, img);
+    }
+  }
+
+  // 5. Attributes
+  final attrs = (p['attributes'] as List?) ?? const [];
+  for (final a in attrs.whereType<Map>()) {
+    final key = ((a['taxonomy'] ?? a['name'])?.toString() ?? '').toLowerCase();
+    if (key.contains('color') || key == 'pa_color' || key.contains('colour')) {
+      final terms = a['terms'] ?? a['options'] ?? a['options_json'] ?? a['value'];
+      if (terms is List) {
+        for (final t in terms) {
+          if (t is Map) {
+            final val = (t['name'] ?? t['value'] ?? t['label'] ?? '').toString();
+            final img = (t['image'] ?? t['imageUrl'] ?? t['photo'] ?? t['swatch'] ?? t['src'] ?? t['icon'])?.toString();
+            final hex = (t['hex'] ?? t['code'] ?? t['colorCode'] ?? t['value'] ?? t['color'])?.toString();
+            addOrUpdateSwatch(val, img, hex);
+          } else if (t != null) {
+            addOrUpdateSwatch(t.toString());
+          }
+        }
+      } else if (terms is String && terms.trim().isNotEmpty) {
+        for (final s in terms.split(',')) {
+          addOrUpdateSwatch(s);
+        }
+      }
+    }
+  }
+
+  // 6. Variants
+  final vars = (p['variants'] as List?) ?? (p['variations'] as List?) ?? const [];
+  for (final v in vars.whereType<Map>()) {
+    final c = (v['color'] ?? v['attributes']?['color'] ?? v['attributes']?['pa_color'])?.toString();
+    final img = (v['image'] ?? v['imageUrl'] ?? v['thumbnail'])?.toString();
+    final hex = (v['colorCode'] ?? v['hex'])?.toString();
+    if (c != null) addOrUpdateSwatch(c, img, hex);
+  }
+
+  // 7. Title fallback
+  if (result.isEmpty) {
+    final name = (p['name'] ?? p['title'] ?? '').toString();
+    final g = guessColor(name);
+    if (g != null) {
+      addOrUpdateSwatch(name);
+    }
+  }
+
+  return result;
+}
+
 List<String> _extractProductColors(Map<String, dynamic> p) {
   final Set<String> colors = {};
+  final swatches = (p['colorSwatches'] as List?) ?? (p['swatches'] as List?) ?? const [];
+  for (final s in swatches) {
+    if (s is Map) {
+      final val = (s['color'] ?? s['name'] ?? s['label'] ?? s['title'])?.toString().trim();
+      if (val != null && val.isNotEmpty) colors.add(val);
+    }
+  }
   if (p['color'] is String && (p['color'] as String).trim().isNotEmpty) {
     colors.addAll((p['color'] as String).split(',').map((e) => e.trim()));
   }
@@ -1465,7 +1605,7 @@ class SmallTile extends StatelessWidget {
     final name = (HtmlDecode.text(p['name']) as String? ?? '').trim();
     final priceText = _priceTextFrom(p);
     final sources = _imagesFromProduct(p, targetColor: targetColor);
-    final colorList = _extractProductColors(p);
+    final colorSwatches = _extractColorsFromProductMap(p);
     String? firstImg = sources.isNotEmpty ? sources.first : null;
     if (firstImg != null && firstImg.isNotEmpty && !firstImg.startsWith('http')) {
       firstImg = 'https://backend.tobeque.com$firstImg';
@@ -1539,28 +1679,44 @@ class SmallTile extends StatelessWidget {
                           ),
                         ),
                       ),
-                    if (colorList.isNotEmpty)
+                    if (colorSwatches.isNotEmpty)
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          ...colorList.take(4).map((cName) => Container(
-                            margin: const EdgeInsets.only(left: 4),
-                            width: 10,
-                            height: 10,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: _parseColorSwatch(cName),
-                              border: Border.all(
-                                color: _parseColorSwatch(cName) == Colors.white ? Colors.black38 : Colors.black12,
-                                width: 1,
+                          ...colorSwatches.take(4).map((swatchData) {
+                            final bool hasImage = swatchData.image != null && swatchData.image!.isNotEmpty;
+                            final Color swatchColor = swatchData.color;
+                            final bool isLight = swatchColor == const Color(0xFFFFFFFF) || swatchColor == const Color(0xFFFAFAFA);
+
+                            return Container(
+                              margin: const EdgeInsets.only(left: 3),
+                              width: 12,
+                              height: 12,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: isLight ? Colors.black38 : Colors.black12,
+                                  width: 1,
+                                ),
+                                color: hasImage ? Colors.white : swatchColor,
                               ),
-                            ),
-                          )),
-                          if (colorList.length > 4)
+                              child: ClipOval(
+                                child: hasImage
+                                    ? CachedNetworkImage(
+                                        imageUrl: swatchData.image!,
+                                        fit: BoxFit.cover,
+                                        placeholder: (_, __) => ColoredBox(color: swatchColor),
+                                        errorWidget: (_, __, ___) => ColoredBox(color: swatchColor),
+                                      )
+                                    : null,
+                              ),
+                            );
+                          }),
+                          if (colorSwatches.length > 4)
                             Padding(
                               padding: const EdgeInsets.only(left: 2),
                               child: Text(
-                                '+${colorList.length - 4}',
+                                '+${colorSwatches.length - 4}',
                                 style: const TextStyle(fontSize: 9, color: Colors.black54, fontWeight: FontWeight.w700),
                               ),
                             ),

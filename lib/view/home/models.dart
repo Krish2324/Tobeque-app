@@ -46,6 +46,7 @@ class WcProduct {
   final String? hotMedia;       // hotRightNowMedia URL (video or image)
   final String? categorySlug;   // for routing
   final String? slug;           // product slug for routing
+  final Map<String, dynamic>? rawMap;
 
   WcProduct({
     required this.id,
@@ -57,6 +58,7 @@ class WcProduct {
     this.hotMedia,
     this.categorySlug,
     this.slug,
+    this.rawMap,
   });
 
   Map<String, dynamic> toJson() => {
@@ -69,14 +71,15 @@ class WcProduct {
         'hotMedia': hotMedia,
         'categorySlug': categorySlug,
         'slug': slug,
+        if (rawMap != null) ...rawMap!,
       };
 
   factory WcProduct.fromJson(Map<String, dynamic> json) {
     final imgs = List<String>.from(json['images'] ?? []);
     final primary = imgs.isNotEmpty ? imgs.first : json['image'];
     return WcProduct(
-      id: json['id'] ?? '',
-      name: json['name'] ?? '',
+      id: (json['id'] ?? json['_id'] ?? '').toString(),
+      name: (json['name'] ?? json['title'] ?? '').toString(),
       priceHtml: json['priceHtml'],
       image: primary,
       images: imgs,
@@ -84,6 +87,7 @@ class WcProduct {
       hotMedia: json['hotMedia'],
       categorySlug: json['categorySlug'],
       slug: json['slug'],
+      rawMap: json,
     );
   }
 
