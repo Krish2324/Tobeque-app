@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:smooth_page_indicator/smooth_page_indicator.dart';
+import 'package:flutter_html/flutter_html.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:shimmer/shimmer.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:tobeque/utills/html_decode.dart';
 import 'package:tobeque/constants/api_constants.dart';
 import 'package:tobeque/view/cart/cart_screen.dart';
@@ -79,7 +84,6 @@ class ProductDetailPage extends StatelessWidget {
 
       final rawDesc = (p['fullDescription'] ?? p['description'] ?? p['shortDescription'] ?? '').toString();
       final desc = rawDesc.replaceAll(RegExp(r'<[^>]*>'), '').replaceAll('&nbsp;', ' ').trim();
-      final fabricCare = (p['fabricCare'] ?? '').toString().replaceAll(RegExp(r'<[^>]*>'), '').trim();
       final catName = (p['category'] is Map ? p['category']['name'] : null)?.toString() ?? 'TOBEQUE';
 
       return Scaffold(
@@ -133,7 +137,7 @@ class ProductDetailPage extends StatelessWidget {
                     background: Stack(
                       fit: StackFit.expand,
                       children: [
-                        // Image PageView with pull-down gesture to expand
+                        // Image PageView with tap to open full screen
                         PageView.builder(
                           controller: c.pageCtrl,
                           onPageChanged: (i) => c.page.value = i,
@@ -146,40 +150,64 @@ class ProductDetailPage extends StatelessWidget {
                               );
                             }
                             return GestureDetector(
-                              onTap: () => _openImageLightbox(ctx, images, i),
-                              child: CachedNetworkImage(
-                                imageUrl: images[i],
-                                fit: BoxFit.cover,
-                                alignment: Alignment.topCenter,
-                                placeholder: (_, __) => _ShimmerBox(),
-                                errorWidget: (_, __, ___) => Container(
-                                  color: const Color(0xFFF5F5F5),
-                                  child: const Icon(Icons.broken_image_outlined, color: Colors.black26, size: 48),
+                              behavior: HitTestBehavior.opaque,
+                              onTap: () => _openImageLightbox(context, images, i),
+                              child: Hero(
+                                tag: 'product_image_${images[i]}',
+                                child: CachedNetworkImage(
+                                  imageUrl: images[i],
+                                  fit: BoxFit.cover,
+                                  alignment: Alignment.topCenter,
+                                  placeholder: (_, __) => const _ShimmerBox(),
+                                  errorWidget: (_, __, ___) => Container(
+                                    color: const Color(0xFFF5F5F5),
+                                    child: const Icon(Icons.broken_image_outlined, color: Colors.black26, size: 48),
+                                  ),
                                 ),
                               ),
                             );
                           },
                         ),
 
-                        // Image Counter Pill (Top Right)
+                        // Smooth Dot Page Indicator (Bottom Center)
                         if (images.length > 1)
                           Positioned(
-                            right: 14,
-                            bottom: 16,
-                            child: Obx(() => Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: Colors.black.withOpacity(0.65),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Text(
-                                    '${c.page.value + 1} / ${images.length}',
-                                    style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700),
-                                  ),
-                                )),
+                            bottom: 20,
+                            left: 0,
+                            right: 0,
+                            child: Center(
+                              child: SmoothPageIndicator(
+                                controller: c.pageCtrl,
+                                count: images.length,
+                                effect: const ExpandingDotsEffect(
+                                  dotHeight: 6,
+                                  dotWidth: 6,
+                                  expansionFactor: 3,
+                                  spacing: 5,
+                                  activeDotColor: Colors.white,
+                                  dotColor: Colors.white38,
+                                ),
+                              ),
+                            ),
                           ),
 
-                        // Floating Wishlist Heart Button (Bottom Right)
+                        // Fullscreen Zoom Icon Button (Bottom Right)
+                        if (images.isNotEmpty)
+                          Positioned(
+                            right: 14,
+                            bottom: 14,
+                            child: CircleAvatar(
+                              backgroundColor: Colors.white.withOpacity(0.9),
+                              radius: 18,
+                              child: IconButton(
+                                padding: EdgeInsets.zero,
+                                icon: const Icon(Icons.fullscreen_rounded, color: Colors.black87, size: 22),
+                                onPressed: () => _openImageLightbox(context, images, c.page.value),
+                              ),
+                            ),
+                          ),
+
+                        // Floating Wishlist Heart Button (Bottom Left)
                         Positioned(
                           left: 14,
                           bottom: 14,
@@ -465,34 +493,32 @@ class ProductDetailPage extends StatelessWidget {
                         Row(
                           children: [
                             GestureDetector(
-                              onTap: () async {
-                                final n = c.product.value?['name'] ?? 'product';
-                                final pId = c.product.value?['_id'] ?? c.product.value?['id'] ?? '';
-                                final msg = 'Hi Tobeque, I have a question about $n (ID: $pId).';
-                                final ok = await openWhatsAppChat(Constent.phone, message: msg, defaultCountryCode: '91');
-                                if (!ok && context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text('Could not open WhatsApp')),
-                                  );
-                                }
-                              },
-                              child: const Row(
-                                children: [
-                                  Icon(Icons.help_outline, size: 16, color: Colors.black45),
-                                  SizedBox(width: 6),
-                                  Text('ASK A QUESTION', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.black54)),
-                                ],
+                              behavior: HitTestBehavior.opaque,
+                              onTap: () => _showAskQuestionModal(context, p),
+                              child: const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.help_outline, size: 16, color: Colors.black45),
+                                    SizedBox(width: 6),
+                                    Text('ASK A QUESTION', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.black54)),
+                                  ],
+                                ),
                               ),
                             ),
                             const SizedBox(width: 24),
                             GestureDetector(
-                              onTap: () {},
-                              child: const Row(
-                                children: [
-                                  Icon(Icons.share_outlined, size: 16, color: Colors.black45),
-                                  SizedBox(width: 6),
-                                  Text('SHARE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.black54)),
-                                ],
+                              behavior: HitTestBehavior.opaque,
+                              onTap: () => _showShareModal(context, p, images.isNotEmpty ? images.first : ''),
+                              child: const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.share_outlined, size: 16, color: Colors.black45),
+                                    SizedBox(width: 6),
+                                    Text('SHARE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.black54)),
+                                  ],
+                                ),
                               ),
                             ),
                           ],
@@ -630,12 +656,30 @@ class ProductDetailPage extends StatelessWidget {
                         Obx(() {
                           final isDescOpen = c.descExpanded.value;
                           final isShippingOpen = c.shippingExpanded.value;
-                          final shippingPolicyText = (p['shippingReturns'] ?? p['shippingReturnsText'] ?? 'Orders are processed within 1-2 business days. Returns accepted within 14 days of delivery.').toString();
+
+                          // Get raw HTML from API field (shippingReturns)
+                          final rawShipping = (p['shippingReturns'] ?? p['shippingReturnsText'] ?? p['shippingPolicy'] ?? p['shippingInfo'] ?? '').toString().trim();
+
+                          // Detect if it's actually empty / null string
+                          final isShippingEmpty = rawShipping.isEmpty ||
+                              rawShipping.toLowerCase() == 'null' ||
+                              rawShipping.toLowerCase() == 'undefined' ||
+                              rawShipping == '[]';
+
+                          // Default fallback HTML when admin hasn't filled the field
+                          const defaultShippingHtml =
+                            '<p>Orders are processed within 1-2 business days. Returns accepted within 14 days of delivery.</p>';
+
+                          final shippingHtml = isShippingEmpty ? defaultShippingHtml : rawShipping;
+
+                          // Raw description from API
+                          final rawDesc2 = (p['fullDescription'] ?? p['description'] ?? p['shortDescription'] ?? '').toString();
+                          final hasHtmlInDesc = rawDesc2.contains('<');
 
                           return Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              if (desc.isNotEmpty) ...[
+                              if (desc.isNotEmpty || rawDesc2.isNotEmpty) ...[
                                 GestureDetector(
                                   onTap: () => c.descExpanded.toggle(),
                                   child: Container(
@@ -653,23 +697,36 @@ class ProductDetailPage extends StatelessWidget {
                                   ),
                                 ),
                                 if (isDescOpen)
-                                  Padding(
-                                    padding: const EdgeInsets.all(16),
-                                    child: Text(
-                                      desc,
-                                      style: const TextStyle(fontSize: 13, height: 1.6, color: Colors.black87),
-                                    ),
-                                  ),
+                                  hasHtmlInDesc
+                                    ? Padding(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                                        child: Html(
+                                          data: rawDesc2,
+                                          style: {
+                                            'body': Style(fontSize: FontSize(13), lineHeight: LineHeight(1.6), color: Colors.black87, margin: Margins.zero, padding: HtmlPaddings.zero),
+                                            'p': Style(margin: Margins.only(bottom: 8)),
+                                            'li': Style(margin: Margins.only(bottom: 4)),
+                                            'strong': Style(fontWeight: FontWeight.w700),
+                                          },
+                                        ),
+                                      )
+                                    : Padding(
+                                        padding: const EdgeInsets.all(16),
+                                        child: Text(
+                                          desc,
+                                          style: const TextStyle(fontSize: 13, height: 1.6, color: Colors.black87),
+                                        ),
+                                      ),
                               ],
 
-                              // SHIPPING & RETURNS
+                              // SHIPPING & RETURNS — renders exact HTML from admin
                               GestureDetector(
                                 onTap: () => c.shippingExpanded.toggle(),
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(vertical: 16),
                                   decoration: BoxDecoration(
                                     border: Border(
-                                      top: desc.isEmpty ? const BorderSide(color: Color(0xFFEEEEEE)) : BorderSide.none,
+                                      top: (desc.isEmpty && rawDesc2.isEmpty) ? const BorderSide(color: Color(0xFFEEEEEE)) : BorderSide.none,
                                       bottom: const BorderSide(color: Color(0xFFEEEEEE)),
                                     ),
                                   ),
@@ -684,10 +741,19 @@ class ProductDetailPage extends StatelessWidget {
                               ),
                               if (isShippingOpen)
                                 Padding(
-                                  padding: const EdgeInsets.all(16),
-                                  child: Text(
-                                    shippingPolicyText,
-                                    style: const TextStyle(fontSize: 13, height: 1.6, color: Colors.black54),
+                                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                                  child: Html(
+                                    data: shippingHtml,
+                                    style: {
+                                      'body': Style(fontSize: FontSize(13), lineHeight: LineHeight(1.6), color: Colors.black87, margin: Margins.zero, padding: HtmlPaddings.zero),
+                                      'p': Style(margin: Margins.only(bottom: 8)),
+                                      'li': Style(margin: Margins.only(bottom: 6)),
+                                      'strong': Style(fontWeight: FontWeight.w700),
+                                      'h1': Style(fontSize: FontSize(16), fontWeight: FontWeight.w800),
+                                      'h2': Style(fontSize: FontSize(15), fontWeight: FontWeight.w800),
+                                      'h3': Style(fontSize: FontSize(14), fontWeight: FontWeight.w700),
+                                      'a': Style(color: Colors.black87, textDecoration: TextDecoration.underline),
+                                    },
                                   ),
                                 ),
                             ],
@@ -821,6 +887,277 @@ class ProductDetailPage extends StatelessWidget {
     );
   }
 
+  void _showAskQuestionModal(BuildContext context, Map<String, dynamic> product) {
+    final nameCtrl = TextEditingController();
+    final contactCtrl = TextEditingController();
+    final questionCtrl = TextEditingController();
+
+    final prodName = (product['name'] ?? product['title'] ?? 'Product').toString();
+    final pId = (product['_id'] ?? product['id'] ?? '').toString();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(
+          top: 20,
+          left: 20,
+          right: 20,
+          bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'ASK A QUESTION',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900, letterSpacing: 0.8),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close, size: 20, color: Colors.black54),
+                  onPressed: () => Navigator.pop(ctx),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Have a question about ${HtmlDecode.text(prodName)}? Send us a message.',
+              style: const TextStyle(fontSize: 12, color: Colors.black54),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: nameCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Your Name *',
+                labelStyle: TextStyle(fontSize: 12, color: Colors.black54),
+                focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.black, width: 1.5)),
+                border: OutlineInputBorder(),
+                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: contactCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Email or Mobile Number *',
+                labelStyle: TextStyle(fontSize: 12, color: Colors.black54),
+                focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.black, width: 1.5)),
+                border: OutlineInputBorder(),
+                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: questionCtrl,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                labelText: 'Your Question / Inquiry *',
+                labelStyle: TextStyle(fontSize: 12, color: Colors.black54),
+                alignLabelWithHint: true,
+                focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.black, width: 1.5)),
+                border: OutlineInputBorder(),
+                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () async {
+                      final qText = questionCtrl.text.trim();
+                      final uName = nameCtrl.text.trim();
+                      final msg = 'Hi Tobeque, I have a question about ${HtmlDecode.text(prodName)} (ID: $pId).'
+                          '${uName.isNotEmpty ? '\nName: $uName' : ''}'
+                          '${qText.isNotEmpty ? '\nQuestion: $qText' : ''}';
+                      Navigator.pop(ctx);
+                      final ok = await openWhatsAppChat(Constent.phone, message: msg, defaultCountryCode: '91');
+                      if (!ok && context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Could not open WhatsApp')),
+                        );
+                      }
+                    },
+                    icon: const FaIcon(FontAwesomeIcons.whatsapp, size: 16, color: Colors.white),
+                    label: const Text('WHATSAPP', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 0.5)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF25D366),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () {
+                      final qText = questionCtrl.text.trim();
+                      if (qText.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Please enter your question.')),
+                        );
+                        return;
+                      }
+                      Navigator.pop(ctx);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Thank you! Your question about "${HtmlDecode.text(prodName)}" has been submitted.'),
+                          backgroundColor: Colors.black87,
+                        ),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.black,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                    ),
+                    child: const Text('SUBMIT INQUIRY', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 0.5)),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showShareModal(BuildContext context, Map<String, dynamic> product, String image) {
+    final prodName = (product['name'] ?? product['title'] ?? 'Product').toString();
+    final pId = (product['_id'] ?? product['id'] ?? '').toString();
+    final shareLink = 'https://tobeque.com/product/$pId';
+    final shareText = 'Check out ${HtmlDecode.text(prodName)} on Tobeque!\n$shareLink';
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'SHARE PRODUCT',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900, letterSpacing: 0.8),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close, size: 20, color: Colors.black54),
+                  onPressed: () => Navigator.pop(ctx),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF9F9F9),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFEEEEEE)),
+              ),
+              child: Row(
+                children: [
+                  if (image.isNotEmpty)
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: CachedNetworkImage(
+                        imageUrl: image,
+                        width: 44,
+                        height: 44,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      HtmlDecode.text(prodName),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.black87),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: const BoxDecoration(color: Color(0xFF25D366), shape: BoxShape.circle),
+                child: const FaIcon(FontAwesomeIcons.whatsapp, size: 18, color: Colors.white),
+              ),
+              title: const Text('Share on WhatsApp', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+              subtitle: const Text('Send directly to your WhatsApp contacts', style: TextStyle(fontSize: 11, color: Colors.black45)),
+              onTap: () async {
+                Navigator.pop(ctx);
+                final waUri = Uri.parse('whatsapp://send?text=${Uri.encodeComponent(shareText)}');
+                if (await canLaunchUrl(waUri)) {
+                  await launchUrl(waUri, mode: LaunchMode.externalApplication);
+                } else {
+                  final waWeb = Uri.parse('https://api.whatsapp.com/send?text=${Uri.encodeComponent(shareText)}');
+                  await launchUrl(waWeb, mode: LaunchMode.externalApplication);
+                }
+              },
+            ),
+            const Divider(height: 1, color: Color(0xFFEEEEEE)),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: const BoxDecoration(color: Colors.black87, shape: BoxShape.circle),
+                child: const Icon(Icons.copy_rounded, size: 18, color: Colors.white),
+              ),
+              title: const Text('Copy Link', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+              subtitle: Text(shareLink, style: const TextStyle(fontSize: 11, color: Colors.black45), maxLines: 1, overflow: TextOverflow.ellipsis),
+              onTap: () {
+                Clipboard.setData(ClipboardData(text: shareLink));
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Product link copied to clipboard!')),
+                );
+              },
+            ),
+            const Divider(height: 1, color: Color(0xFFEEEEEE)),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: const BoxDecoration(color: Color(0xFF1976D2), shape: BoxShape.circle),
+                child: const Icon(Icons.mail_outline_rounded, size: 18, color: Colors.white),
+              ),
+              title: const Text('Share via Email', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+              subtitle: const Text('Send an email with product details', style: TextStyle(fontSize: 11, color: Colors.black45)),
+              onTap: () async {
+                Navigator.pop(ctx);
+                final mailUri = Uri.parse('mailto:?subject=${Uri.encodeComponent('Check out ${HtmlDecode.text(prodName)} on Tobeque')}&body=${Uri.encodeComponent(shareText)}');
+                if (await canLaunchUrl(mailUri)) {
+                  await launchUrl(mailUri, mode: LaunchMode.externalApplication);
+                }
+              },
+            ),
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _showSizeGuideModal(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -913,13 +1250,14 @@ class _FullScreenImageViewer extends StatefulWidget {
 
 class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
   late final PageController _pageCtrl;
-  late int _currentIndex;
   bool _isZoomed = false;
+  int _pointers = 0;
+  int _currentPage = 0;
 
   @override
   void initState() {
     super.initState();
-    _currentIndex = widget.initialIndex;
+    _currentPage = widget.initialIndex;
     _pageCtrl = PageController(initialPage: widget.initialIndex);
   }
 
@@ -939,33 +1277,51 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
 
   @override
   Widget build(BuildContext context) {
+    final bool disableScroll = _isZoomed || _pointers >= 2;
+
     return Scaffold(
       backgroundColor: Colors.black,
-      body: SafeArea(
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            // Background dismiss tap detector
-            GestureDetector(
-              onTap: () {
-                if (!_isZoomed) {
-                  Navigator.of(context).pop();
-                }
-              },
-              child: Container(color: Colors.black),
-            ),
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          // Background dismiss tap detector
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () {
+              if (!_isZoomed) {
+                Navigator.of(context).pop();
+              }
+            },
+            child: Container(color: Colors.black),
+          ),
 
-            // Swipable + Zoomable Image Carousel
-            PageView.builder(
+          // Swipable + Zoomable Image Carousel with Multi-Touch Pointer Listener
+          Listener(
+            onPointerDown: (_) {
+              setState(() {
+                _pointers++;
+              });
+            },
+            onPointerUp: (_) {
+              setState(() {
+                _pointers = (_pointers - 1).clamp(0, 10);
+              });
+            },
+            onPointerCancel: (_) {
+              setState(() {
+                _pointers = (_pointers - 1).clamp(0, 10);
+              });
+            },
+            child: PageView.builder(
               controller: _pageCtrl,
-              physics: _isZoomed
+              physics: disableScroll
                   ? const NeverScrollableScrollPhysics()
                   : const BouncingScrollPhysics(),
               itemCount: widget.images.length,
               onPageChanged: (index) {
                 setState(() {
-                  _currentIndex = index;
                   _isZoomed = false;
+                  _currentPage = index;
                 });
               },
               itemBuilder: (context, i) {
@@ -973,128 +1329,63 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
                   key: ValueKey(widget.images[i]),
                   imageUrl: widget.images[i],
                   onZoomChanged: _onZoomChanged,
+                  onDismiss: () => Navigator.of(context).pop(),
                 );
               },
             ),
+          ),
 
-            // Top Header Bar (Dismiss / Back Button, Image Counter, Close X Button)
-            Positioned(
-              top: 10,
-              left: 14,
-              right: 14,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  // Back / Dismiss Button
-                  Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      onTap: () => Navigator.of(context).pop(),
-                      borderRadius: BorderRadius.circular(24),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.65),
-                          borderRadius: BorderRadius.circular(24),
-                          border: Border.all(color: Colors.white24, width: 1),
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 14),
-                            SizedBox(width: 6),
-                            Text(
-                              'Dismiss',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  // Counter Pill
-                  if (widget.images.length > 1)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          // Top Right Close Icon Button
+          // Close Button (Top Right)
+          Positioned(
+            top: 0,
+            right: 0,
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.only(top: 12, right: 16),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () => Navigator.of(context).pop(),
+                    borderRadius: BorderRadius.circular(24),
+                    child: Container(
+                      width: 40,
+                      height: 40,
                       decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.65),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: Colors.white24, width: 1),
+                        color: Colors.black.withOpacity(0.6),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white30, width: 1),
                       ),
-                      child: Text(
-                        '${_currentIndex + 1} / ${widget.images.length}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 1,
-                        ),
-                      ),
+                      child: const Icon(Icons.close_rounded, color: Colors.white, size: 24),
                     ),
-
-                  // Prominent Close 'X' Circle Button
-                  Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      onTap: () => Navigator.of(context).pop(),
-                      borderRadius: BorderRadius.circular(24),
-                      child: Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.65),
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white24, width: 1),
-                        ),
-                        child: const Icon(Icons.close_rounded, color: Colors.white, size: 24),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // Bottom Gesture Guide / Zoom Reset Button
-            Positioned(
-              bottom: 24,
-              left: 0,
-              right: 0,
-              child: Center(
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.75),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: Colors.white24, width: 1),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        _isZoomed ? Icons.zoom_out_map_rounded : Icons.pinch_outlined,
-                        color: Colors.white70,
-                        size: 16,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        _isZoomed
-                            ? 'Double-tap or pinch to reset zoom'
-                            : 'Pinch / double-tap to zoom • Tap Dismiss to exit',
-                        style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w600),
-                      ),
-                    ],
                   ),
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+
+          // Smooth Dot Indicator (Bottom Center) — only shown when multiple images
+          if (widget.images.length > 1)
+            Positioned(
+              bottom: 32,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: AnimatedSmoothIndicator(
+                  activeIndex: _currentPage,
+                  count: widget.images.length,
+                  effect: const ExpandingDotsEffect(
+                    dotHeight: 7,
+                    dotWidth: 7,
+                    expansionFactor: 3,
+                    spacing: 6,
+                    activeDotColor: Colors.white,
+                    dotColor: Colors.white38,
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -1103,11 +1394,13 @@ class _FullScreenImageViewerState extends State<_FullScreenImageViewer> {
 class _ZoomableImageItem extends StatefulWidget {
   final String imageUrl;
   final ValueChanged<bool> onZoomChanged;
+  final VoidCallback onDismiss;
 
   const _ZoomableImageItem({
     super.key,
     required this.imageUrl,
     required this.onZoomChanged,
+    required this.onDismiss,
   });
 
   @override
@@ -1190,19 +1483,28 @@ class _ZoomableImageItemState extends State<_ZoomableImageItem> with SingleTicke
       panEnabled: true,
       scaleEnabled: true,
       child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          final currentScale = _transformationController.value.getMaxScaleOnAxis();
+          if (currentScale <= 1.05) {
+            widget.onDismiss();
+          }
+        },
         onDoubleTapDown: _handleDoubleTapDown,
         onDoubleTap: _handleDoubleTap,
-        child: Center(
-          child: CachedNetworkImage(
-            imageUrl: widget.imageUrl,
-            fit: BoxFit.contain,
-            placeholder: (_, __) => const Center(
-              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-            ),
-            errorWidget: (_, __, ___) => const Icon(
-              Icons.broken_image_outlined,
-              color: Colors.white54,
-              size: 64,
+        child: SizedBox.expand(
+          child: Center(
+            child: CachedNetworkImage(
+              imageUrl: widget.imageUrl,
+              fit: BoxFit.contain,
+              placeholder: (_, __) => const Center(
+                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+              ),
+              errorWidget: (_, __, ___) => const Icon(
+                Icons.broken_image_outlined,
+                color: Colors.white54,
+                size: 64,
+              ),
             ),
           ),
         ),
@@ -1302,6 +1604,150 @@ class _RelatedProductCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Opens a full-screen image lightbox with swipe support and pinch-to-zoom.
+void _openImageLightbox(BuildContext context, List<String> images, int initialIndex) {
+  final PageController pageCtrl = PageController(initialPage: initialIndex);
+
+  Navigator.of(context).push(
+    PageRouteBuilder(
+      opaque: false,
+      barrierDismissible: true,
+      barrierColor: Colors.black,
+      fullscreenDialog: true,
+      pageBuilder: (ctx, animation, _) {
+        return FadeTransition(
+          opacity: animation,
+          child: _ImageLightboxPage(
+            images: images,
+            initialIndex: initialIndex,
+            pageController: pageCtrl,
+          ),
+        );
+      },
+    ),
+  );
+}
+
+class _ImageLightboxPage extends StatefulWidget {
+  const _ImageLightboxPage({
+    required this.images,
+    required this.initialIndex,
+    required this.pageController,
+  });
+  final List<String> images;
+  final int initialIndex;
+  final PageController pageController;
+
+  @override
+  State<_ImageLightboxPage> createState() => _ImageLightboxPageState();
+}
+
+class _ImageLightboxPageState extends State<_ImageLightboxPage> {
+  late int _current;
+
+  @override
+  void initState() {
+    super.initState();
+    _current = widget.initialIndex;
+  }
+
+  @override
+  void dispose() {
+    widget.pageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.close, color: Colors.white, size: 28),
+          onPressed: () => Navigator.pop(context),
+        ),
+        actions: [
+          if (widget.images.length > 1)
+            Padding(
+              padding: const EdgeInsets.only(right: 16, top: 12),
+              child: Text(
+                '${_current + 1} / ${widget.images.length}',
+                style: const TextStyle(
+                  color: Colors.white70,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+        ],
+      ),
+      body: GestureDetector(
+        onTap: () => Navigator.pop(context),
+        child: PageView.builder(
+          controller: widget.pageController,
+          itemCount: widget.images.length,
+          onPageChanged: (i) => setState(() => _current = i),
+          itemBuilder: (ctx, i) {
+            return GestureDetector(
+              onTap: () {}, // prevent tap-to-close on image itself
+              child: InteractiveViewer(
+                minScale: 0.5,
+                maxScale: 5.0,
+                child: Center(
+                  child: SizedBox(
+                    height: MediaQuery.of(context).size.height * 0.90,
+                    width: MediaQuery.of(context).size.width,
+                    child: Hero(
+                      tag: 'product_image_${widget.images[i]}',
+                      child: CachedNetworkImage(
+                        imageUrl: widget.images[i],
+                        fit: BoxFit.cover,
+                        placeholder: (_, __) => const Center(
+                          child: CircularProgressIndicator(color: Colors.white54, strokeWidth: 2),
+                        ),
+                        errorWidget: (_, __, ___) => const Icon(
+                          Icons.broken_image_outlined,
+                          color: Colors.white30,
+                          size: 56,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+      bottomNavigationBar: widget.images.length > 1
+          ? Container(
+              color: Colors.black,
+              padding: const EdgeInsets.only(bottom: 24, top: 12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(widget.images.length, (i) {
+                  final active = i == _current;
+                  return AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    width: active ? 18 : 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: active ? Colors.white : Colors.white38,
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  );
+                }),
+              ),
+            )
+          : null,
     );
   }
 }

@@ -69,7 +69,7 @@ class CheckoutScreen extends GetView<CheckoutController> {
               onRefresh: controller.refreshAll,
               color: Colors.black,
               child: ListView(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 140),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
                 children: [
                   // Step Indicator Header
                   const _StepHeader(),
@@ -136,7 +136,7 @@ class CheckoutScreen extends GetView<CheckoutController> {
                   duration: const Duration(milliseconds: 160),
                   child: Stack(
                     children: [
-                      Positioned.fill(child: Container(color: Colors.black.withOpacity(0.06))),
+                      Positioned.fill(child: Container(color: Colors.black.withValues(alpha: 0.06))),
                       Positioned.fill(
                         child: BackdropFilter(
                           filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
@@ -167,8 +167,8 @@ class CheckoutScreen extends GetView<CheckoutController> {
           ],
         ),
 
-        // Sticky Bottom Checkout Action Bar
-        bottomSheet: Container(
+        // Sticky Bottom Checkout Action Bar (Using bottomNavigationBar + SafeArea so Android system nav bar never overlaps)
+        bottomNavigationBar: Container(
           decoration: const BoxDecoration(
             border: Border(top: BorderSide(color: Color(0xFFEEEEEE))),
             color: Colors.white,
@@ -176,56 +176,59 @@ class CheckoutScreen extends GetView<CheckoutController> {
               BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, -2)),
             ],
           ),
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
           child: SafeArea(
             top: false,
-            child: Row(
-              children: [
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('TOTAL AMOUNT', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 0.8, color: Colors.black54)),
-                    const SizedBox(height: 2),
-                    Obx(() {
-                      final totalsMap = controller.totals;
-                      final grandTotal = totalsMap['total'] ?? totalsMap['total_price'] ?? 0.0;
-                      return Text(
-                        controller.formatPrice(grandTotal),
-                        style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 19, color: Colors.black),
-                      );
-                    }),
-                  ],
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: SizedBox(
-                    height: 48,
-                    child: Obx(() {
-                      final busy = controller.mutating.value;
-                      return ElevatedButton(
-                        onPressed: busy ? null : controller.placeOrder,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.black,
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        ),
-                        child: busy
-                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                          : const Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.lock_outline, size: 16),
-                                SizedBox(width: 8),
-                                Text('PLACE ORDER', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13, letterSpacing: 1)),
-                              ],
-                            ),
-                      );
-                    }),
+            bottom: true,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+              child: Row(
+                children: [
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('TOTAL AMOUNT', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 0.8, color: Colors.black54)),
+                      const SizedBox(height: 2),
+                      Obx(() {
+                        final totalsMap = controller.totals;
+                        final grandTotal = totalsMap['total'] ?? totalsMap['total_price'] ?? 0.0;
+                        return Text(
+                          controller.formatPrice(grandTotal),
+                          style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 19, color: Colors.black),
+                        );
+                      }),
+                    ],
                   ),
-                ),
-              ],
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: SizedBox(
+                      height: 48,
+                      child: Obx(() {
+                        final busy = controller.mutating.value;
+                        return ElevatedButton(
+                          onPressed: busy ? null : controller.placeOrder,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.black,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          child: busy
+                            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                            : const Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.lock_outline, size: 16),
+                                  SizedBox(width: 8),
+                                  Text('PLACE ORDER', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13, letterSpacing: 1)),
+                                ],
+                              ),
+                        );
+                      }),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -371,26 +374,61 @@ class _LoginBanner extends GetView<CheckoutController> {
 class _BillingForm extends GetView<CheckoutController> {
   const _BillingForm();
 
-  InputDecoration _dec(String label, {String? hint, Widget? suffixIcon}) => InputDecoration(
+  InputDecoration _dec(
+    String label, {
+    String? hint,
+    Widget? prefixIcon,
+    Widget? suffixIcon,
+  }) =>
+      InputDecoration(
         labelText: label,
+        labelStyle: const TextStyle(
+          color: Color(0xFF6B7280),
+          fontSize: 13,
+          fontWeight: FontWeight.w500,
+        ),
+        floatingLabelStyle: const TextStyle(
+          color: Colors.black,
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+        ),
         hintText: hint,
+        hintStyle: const TextStyle(
+          color: Color(0xFF9CA3AF),
+          fontSize: 12.5,
+          fontWeight: FontWeight.w400,
+        ),
         filled: true,
-        fillColor: const Color(0xFFFAFAFA),
+        fillColor: const Color(0xFFF9FAFB),
+        prefixIcon: prefixIcon,
+        suffixIcon: suffixIcon,
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(10),
           borderSide: const BorderSide(color: Colors.black, width: 1.5),
         ),
-        isDense: true,
-        suffixIcon: suffixIcon,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: Color(0xFFEF4444)),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: Color(0xFFEF4444), width: 1.5),
+        ),
+        errorStyle: const TextStyle(
+          color: Color(0xFFEF4444),
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+        ),
       );
 
   @override
@@ -403,7 +441,10 @@ class _BillingForm extends GetView<CheckoutController> {
           Expanded(
             child: TextFormField(
               controller: controller.firstName,
-              decoration: _dec('First name *'),
+              decoration: _dec(
+                'First name *',
+                prefixIcon: const Icon(Icons.person_outline, size: 18, color: Color(0xFF6B7280)),
+              ),
               validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
             ),
           ),
@@ -411,7 +452,10 @@ class _BillingForm extends GetView<CheckoutController> {
           Expanded(
             child: TextFormField(
               controller: controller.lastName,
-              decoration: _dec('Last name *'),
+              decoration: _dec(
+                'Last name *',
+                prefixIcon: const Icon(Icons.person_outline, size: 18, color: Color(0xFF6B7280)),
+              ),
               validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
             ),
           ),
@@ -423,7 +467,11 @@ class _BillingForm extends GetView<CheckoutController> {
           Expanded(
             child: TextFormField(
               controller: controller.phone,
-              decoration: _dec('Phone *', hint: '10-digit number'),
+              decoration: _dec(
+                'Phone *',
+                hint: '10-digit number',
+                prefixIcon: const Icon(Icons.phone_outlined, size: 18, color: Color(0xFF6B7280)),
+              ),
               keyboardType: TextInputType.phone,
               validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
             ),
@@ -432,19 +480,28 @@ class _BillingForm extends GetView<CheckoutController> {
           Expanded(
             child: TextFormField(
               controller: controller.email,
-              decoration: _dec('Email address *'),
+              decoration: _dec(
+                'Email address (Optional)',
+                prefixIcon: const Icon(Icons.email_outlined, size: 18, color: Color(0xFF6B7280)),
+              ),
               keyboardType: TextInputType.emailAddress,
-              validator: (v) => (v == null || !v.contains('@')) ? 'Valid email required' : null,
+              validator: (v) {
+                if (v == null || v.trim().isEmpty) return null;
+                if (!v.trim().contains('@')) return 'Valid email required';
+                return null;
+              },
             ),
           ),
         ]),
         const SizedBox(height: 12),
 
-        // PINCODE field with auto-lookup indicator
+        // PINCODE field with auto-lookup & Area modal trigger
         Obx(() {
           final isFetching = controller.fetchingPincode.value;
           final valid = controller.pincodeValid.value;
           final msg = controller.pincodeStatusMsg.value;
+          final areas = controller.availableAreas;
+          final selectedArea = controller.selectedArea.value;
 
           Widget? suffix;
           if (isFetching) {
@@ -456,9 +513,9 @@ class _BillingForm extends GetView<CheckoutController> {
               ),
             );
           } else if (valid == true) {
-            suffix = const Icon(Icons.check_circle, color: Color(0xFF2E7D32), size: 20);
+            suffix = const Icon(Icons.check_circle, color: Color(0xFF16A34A), size: 20);
           } else if (valid == false) {
-            suffix = const Icon(Icons.error, color: Colors.redAccent, size: 20);
+            suffix = const Icon(Icons.error_outline, color: Color(0xFFEF4444), size: 20);
           }
 
           return Column(
@@ -468,9 +525,12 @@ class _BillingForm extends GetView<CheckoutController> {
                 controller: controller.postcode,
                 keyboardType: TextInputType.number,
                 maxLength: 6,
-                decoration: _dec('Pincode / ZIP *', hint: '6-digit PIN code', suffixIcon: suffix).copyWith(
-                  counterText: '',
-                ),
+                decoration: _dec(
+                  'Pincode / ZIP *',
+                  hint: '6-digit PIN code',
+                  prefixIcon: const Icon(Icons.location_on_outlined, size: 18, color: Color(0xFF6B7280)),
+                  suffixIcon: suffix,
+                ).copyWith(counterText: ''),
                 onChanged: (v) {
                   if (v.trim().length == 6) {
                     controller.lookupPincode(v.trim());
@@ -478,45 +538,139 @@ class _BillingForm extends GetView<CheckoutController> {
                 },
                 validator: (v) => (v == null || v.trim().length != 6) ? 'Enter valid 6-digit Pincode' : null,
               ),
-              if (msg != null && msg.isNotEmpty)
+              if (valid == true && areas.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF0FDF4),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFDCFCE7)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.place, size: 16, color: Color(0xFF15803D)),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          selectedArea != null
+                              ? 'Area: ${selectedArea['Name']} (${selectedArea['District']})'
+                              : (msg ?? 'Area details fetched'),
+                          style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Color(0xFF15803D)),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      InkWell(
+                        onTap: controller.openAreaSelectionModal,
+                        borderRadius: BorderRadius.circular(4),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: const Color(0xFF86EFAC)),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                'Select Area',
+                                style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: Color(0xFF15803D)),
+                              ),
+                              Icon(Icons.arrow_drop_down, size: 14, color: Color(0xFF15803D)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ] else if (msg != null && msg.isNotEmpty) ...[
+                const SizedBox(height: 4),
                 Padding(
-                  padding: const EdgeInsets.only(top: 4, left: 4),
+                  padding: const EdgeInsets.only(left: 4),
                   child: Row(
                     children: [
                       Icon(
-                        valid == true ? Icons.location_on : Icons.info_outline,
+                        valid == false ? Icons.info_outline : Icons.location_on,
                         size: 14,
-                        color: valid == true ? const Color(0xFF2E7D32) : (valid == false ? Colors.redAccent : Colors.black54),
+                        color: valid == false ? const Color(0xFFEF4444) : const Color(0xFF6B7280),
                       ),
                       const SizedBox(width: 4),
                       Text(
                         msg,
                         style: TextStyle(
                           fontSize: 11,
-                          fontWeight: valid == true ? FontWeight.w700 : FontWeight.w500,
-                          color: valid == true ? const Color(0xFF2E7D32) : (valid == false ? Colors.redAccent : Colors.black54),
+                          fontWeight: FontWeight.w500,
+                          color: valid == false ? const Color(0xFFEF4444) : const Color(0xFF6B7280),
                         ),
                       ),
                     ],
                   ),
                 ),
+              ],
             ],
           );
         }),
         const SizedBox(height: 12),
 
-        // Address Line 1
+        // Company Name (Optional)
+        TextFormField(
+          controller: controller.company,
+          onChanged: (val) {
+            controller.hasCompany.value = val.trim().isNotEmpty;
+          },
+          decoration: _dec(
+            'Company Name (Optional)',
+            hint: 'Enter company name if applicable',
+            prefixIcon: const Icon(Icons.business_outlined, size: 18, color: Color(0xFF6B7280)),
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // Dynamic Company GST Number (Mandatory when Company Name is provided)
+        Obx(() {
+          if (!controller.hasCompany.value) return const SizedBox.shrink();
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: TextFormField(
+              controller: controller.gstNumber,
+              textCapitalization: TextCapitalization.characters,
+              decoration: _dec(
+                'Company GST Number *',
+                hint: 'e.g. 22AAAAA0000A1Z5',
+                prefixIcon: const Icon(Icons.receipt_long_outlined, size: 18, color: Color(0xFF6B7280)),
+              ),
+              validator: (v) {
+                if (controller.hasCompany.value && (v == null || v.trim().isEmpty)) {
+                  return 'GST Number is required when Company Name is entered';
+                }
+                return null;
+              },
+            ),
+          );
+        }),
+
+        // Address Line 1 (Building, Street)
         TextFormField(
           controller: controller.address1,
-          decoration: _dec('Flat, House no., Building, Street *'),
+          decoration: _dec(
+            'Flat, House no., Building, Street *',
+            prefixIcon: const Icon(Icons.home_outlined, size: 18, color: Color(0xFF6B7280)),
+          ),
           validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
         ),
         const SizedBox(height: 12),
 
-        // Address Line 2
+        // Address Line 2 (Locality, Area)
         TextFormField(
           controller: controller.address2,
-          decoration: _dec('Area, Colony, Landmark (Optional)'),
+          decoration: _dec(
+            'Area, Colony, Landmark (Optional)',
+            prefixIcon: const Icon(Icons.near_me_outlined, size: 18, color: Color(0xFF6B7280)),
+          ),
         ),
         const SizedBox(height: 12),
 
@@ -525,7 +679,10 @@ class _BillingForm extends GetView<CheckoutController> {
           Expanded(
             child: TextFormField(
               controller: controller.city,
-              decoration: _dec('Town / City *'),
+              decoration: _dec(
+                'Town / City *',
+                prefixIcon: const Icon(Icons.location_city_outlined, size: 18, color: Color(0xFF6B7280)),
+              ),
               validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
             ),
           ),
@@ -533,7 +690,10 @@ class _BillingForm extends GetView<CheckoutController> {
           Expanded(
             child: TextFormField(
               controller: controller.state,
-              decoration: _dec('State *'),
+              decoration: _dec(
+                'State *',
+                prefixIcon: const Icon(Icons.map_outlined, size: 18, color: Color(0xFF6B7280)),
+              ),
               validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
             ),
           ),
@@ -543,7 +703,10 @@ class _BillingForm extends GetView<CheckoutController> {
         // Country
         TextFormField(
           controller: controller.country,
-          decoration: _dec('Country / Region *'),
+          decoration: _dec(
+            'Country / Region *',
+            prefixIcon: const Icon(Icons.public_outlined, size: 18, color: Color(0xFF6B7280)),
+          ),
           validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
         ),
       ],
@@ -644,66 +807,154 @@ class _OrderSummaryCard extends GetView<CheckoutController> {
           // Coupon section
           const Text('Promotional Coupon', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, letterSpacing: 0.5, color: Colors.black54)),
           const SizedBox(height: 8),
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF5F5F5),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFFE0E0E0)),
-                ),
-                child: const Icon(Icons.confirmation_number_outlined, color: Colors.black87, size: 18),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: TextField(
-                  controller: controller.couponCtrl,
-                  decoration: InputDecoration(
-                    isDense: true,
-                    filled: true,
-                    fillColor: const Color(0xFFFAFAFA),
-                    hintText: 'Enter coupon code',
-                    hintStyle: const TextStyle(fontSize: 12),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE0E0E0))),
-                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFFE0E0E0))),
-                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Colors.black)),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              ElevatedButton(
-                onPressed: controller.applyCoupon,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.black,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  elevation: 0,
-                ),
-                child: const Text('APPLY', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 11, letterSpacing: 1)),
-              ),
-            ],
-          ),
-
           Obx(() {
-            if (controller.appliedCoupons.isEmpty) return const SizedBox.shrink();
-            return Padding(
-              padding: const EdgeInsets.only(top: 10),
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 6,
-                children: controller.appliedCoupons.map((c) =>
-                  Chip(
-                    avatar: const Icon(Icons.check_circle, color: Color(0xFF2E7D32), size: 16),
-                    label: Text(c, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
-                    backgroundColor: const Color(0xFFE8F5E9),
-                    deleteIcon: const Icon(Icons.close, size: 14),
-                    onDeleted: () => controller.removeCoupon(c),
-                  )
-                ).toList(),
-              ),
+            final busy = controller.couponLoading.value;
+            final hasCoupon = controller.appliedCoupons.isNotEmpty;
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Input row
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF5F5F5),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFFE0E0E0)),
+                      ),
+                      child: const Icon(Icons.confirmation_number_outlined, color: Colors.black87, size: 18),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: controller.couponCtrl,
+                        textCapitalization: TextCapitalization.characters,
+                        enabled: !busy && !hasCoupon,
+                        onChanged: (_) {
+                          // Clear inline error as user types
+                          if (controller.couponError.value != null) {
+                            controller.couponError.value = null;
+                          }
+                        },
+                        decoration: InputDecoration(
+                          isDense: true,
+                          filled: true,
+                          fillColor: hasCoupon ? const Color(0xFFF0FDF4) : const Color(0xFFFAFAFA),
+                          hintText: hasCoupon ? 'Coupon applied ✓' : 'Enter coupon code',
+                          hintStyle: TextStyle(
+                            fontSize: 12,
+                            color: hasCoupon ? const Color(0xFF15803D) : const Color(0xFF9CA3AF),
+                            fontWeight: hasCoupon ? FontWeight.w700 : FontWeight.w400,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(color: hasCoupon ? const Color(0xFFBBF7D0) : const Color(0xFFE0E0E0)),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(color: hasCoupon ? const Color(0xFFBBF7D0) : const Color(0xFFE0E0E0)),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: const BorderSide(color: Colors.black),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    SizedBox(
+                      height: 44,
+                      child: ElevatedButton(
+                        onPressed: (busy || hasCoupon) ? null : controller.applyCoupon,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.black,
+                          foregroundColor: Colors.white,
+                          disabledBackgroundColor: const Color(0xFFD1D5DB),
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          elevation: 0,
+                        ),
+                        child: busy
+                            ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                            : const Text('APPLY', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 11, letterSpacing: 1)),
+                      ),
+                    ),
+                  ],
+                ),
+
+                // Inline error banner
+                if (controller.couponError.value != null) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFEF2F2),
+                      borderRadius: BorderRadius.circular(7),
+                      border: Border.all(color: const Color(0xFFFECACA)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.error_outline, color: Color(0xFFDC2626), size: 15),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            controller.couponError.value!,
+                            style: const TextStyle(fontSize: 11.5, color: Color(0xFFDC2626), fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+
+                // Inline success banner + applied chips
+                if (hasCoupon) ...[
+                  const SizedBox(height: 8),
+                  // Success banner with savings
+                  if (controller.couponSuccess.value != null)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF0FDF4),
+                        borderRadius: BorderRadius.circular(7),
+                        border: Border.all(color: const Color(0xFFBBF7D0)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.check_circle_outline, color: Color(0xFF16A34A), size: 15),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              controller.couponSuccess.value!,
+                              style: const TextStyle(fontSize: 11.5, color: Color(0xFF15803D), fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  const SizedBox(height: 6),
+                  // Applied coupon chips
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: controller.appliedCoupons.map((c) =>
+                      Chip(
+                        avatar: const Icon(Icons.local_offer, color: Color(0xFF2E7D32), size: 14),
+                        label: Text(c, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12, letterSpacing: 0.5)),
+                        backgroundColor: const Color(0xFFE8F5E9),
+                        side: const BorderSide(color: Color(0xFFC8E6C9)),
+                        deleteIcon: const Icon(Icons.close, size: 14, color: Color(0xFF2E7D32)),
+                        onDeleted: () => controller.removeCoupon(c),
+                        padding: const EdgeInsets.symmetric(horizontal: 2),
+                      )
+                    ).toList(),
+                  ),
+                ],
+              ],
             );
           }),
 
@@ -714,6 +965,8 @@ class _OrderSummaryCard extends GetView<CheckoutController> {
           // Dynamic Pricing Breakdown Table
           Obx(() {
             final disc = controller.discountAmount.value;
+            final cod = controller.codFee.value;
+            final isCod = controller.selectedPaymentId.value == 'cod';
             final totalsMap = controller.totals;
             final subtotalVal = totalsMap['subtotal'] ?? totalsMap['subtotal_price'] ?? 0.0;
             final totalVal = totalsMap['total'] ?? totalsMap['total_price'] ?? 0.0;
@@ -730,6 +983,14 @@ class _OrderSummaryCard extends GetView<CheckoutController> {
                   value: controller.shippingCost.value > 0 ? controller.formatPrice(controller.shippingCost.value) : 'FREE',
                   valueColor: const Color(0xFF2E7D32),
                 ),
+                if (isCod && cod > 0) ...[
+                  const SizedBox(height: 8),
+                  _PriceBreakdownRow(
+                    label: 'COD Handling Fee',
+                    value: '+ ${controller.formatPrice(cod)}',
+                    valueColor: const Color(0xFFB45309),
+                  ),
+                ],
                 if (disc > 0) ...[
                   const SizedBox(height: 8),
                   _PriceBreakdownRow(
@@ -858,10 +1119,29 @@ class _PaymentSection extends GetView<CheckoutController> {
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
-                            children: const [
-                              Text('Cash on Delivery (COD)', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
-                              SizedBox(height: 2),
-                              Text('Pay with cash upon package delivery', style: TextStyle(fontSize: 11, color: Colors.black54)),
+                            children: [
+                              const Text('Cash on Delivery (COD)', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
+                              const SizedBox(height: 2),
+                              const Text('Pay with cash upon package delivery', style: TextStyle(fontSize: 11, color: Colors.black54)),
+                              Obx(() {
+                                final fee = controller.codFee.value;
+                                if (fee <= 0) return const SizedBox.shrink();
+                                return Padding(
+                                  padding: const EdgeInsets.only(top: 5),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFFEF3C7),
+                                      borderRadius: BorderRadius.circular(4),
+                                      border: Border.all(color: const Color(0xFFFDE68A)),
+                                    ),
+                                    child: Text(
+                                      '+ ${controller.formatPrice(fee)} COD handling fee applies',
+                                      style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: Color(0xFF92400E)),
+                                    ),
+                                  ),
+                                );
+                              }),
                             ],
                           ),
                         ),

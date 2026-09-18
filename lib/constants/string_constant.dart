@@ -1,5 +1,5 @@
 class Constent{
   static String email = 'info@tobeque.com';
- static String phone = " 9811143979";
- static String carrerUrl ="https://tobeque.com/job-openings/";
+  static String phone = "8447000200";
+  static String carrerUrl ="https://tobeque.com/career";
 }

@@ -1,4 +1,3 @@
-// lib/view/profile/profile_screen.dart
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -8,7 +7,9 @@ import 'package:tobeque/view/profile/address_binding.dart';
 import 'package:tobeque/view/profile/address_controller.dart';
 import 'package:tobeque/view/profile/address_screen.dart';
 import 'package:tobeque/view/profile/orders_binding.dart';
+import 'package:tobeque/view/profile/orders_controller.dart';
 import 'package:tobeque/view/profile/orders_screen.dart';
+import 'package:tobeque/view/profile/order_view_screen.dart';
 import 'package:tobeque/view/profile/profile_binding.dart';
 import 'package:tobeque/view/profile/sign_in_up.dart';
 import 'profile_controller.dart';
@@ -54,13 +55,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           backgroundColor: Colors.white,
           foregroundColor: Colors.black,
           elevation: 0.5,
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.refresh, size: 20),
-              tooltip: 'Refresh Profile',
-              onPressed: () => controller.fetchUserProfile(),
-            ),
-          ],
         ),
         body: RefreshIndicator(
           onRefresh: () => controller.fetchUserProfile(),
@@ -111,17 +105,59 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     ListTile(
                                       leading: const Icon(Icons.photo_library_outlined, color: Colors.black),
                                       title: const Text('Choose from Gallery'),
-                                      onTap: () {
+                                      onTap: () async {
                                         Navigator.pop(ctx);
-                                        controller.pickAndUploadProfilePhoto(ImageSource.gallery);
+                                        final ok = await controller.pickAndUploadProfilePhoto(ImageSource.gallery);
+                                        if (ok) {
+                                          Get.snackbar(
+                                            'Success',
+                                            'Profile photo updated successfully',
+                                            snackPosition: SnackPosition.BOTTOM,
+                                            backgroundColor: Colors.black87,
+                                            colorText: Colors.white,
+                                            margin: const EdgeInsets.all(16),
+                                            duration: const Duration(seconds: 3),
+                                          );
+                                        } else if (controller.error.value != null && controller.error.value!.isNotEmpty) {
+                                          Get.snackbar(
+                                            'Error',
+                                            controller.error.value!,
+                                            snackPosition: SnackPosition.BOTTOM,
+                                            backgroundColor: Colors.redAccent,
+                                            colorText: Colors.white,
+                                            margin: const EdgeInsets.all(16),
+                                            duration: const Duration(seconds: 3),
+                                          );
+                                        }
                                       },
                                     ),
                                     ListTile(
                                       leading: const Icon(Icons.camera_alt_outlined, color: Colors.black),
                                       title: const Text('Take a Photo'),
-                                      onTap: () {
+                                      onTap: () async {
                                         Navigator.pop(ctx);
-                                        controller.pickAndUploadProfilePhoto(ImageSource.camera);
+                                        final ok = await controller.pickAndUploadProfilePhoto(ImageSource.camera);
+                                        if (ok) {
+                                          Get.snackbar(
+                                            'Success',
+                                            'Profile photo updated successfully',
+                                            snackPosition: SnackPosition.BOTTOM,
+                                            backgroundColor: Colors.black87,
+                                            colorText: Colors.white,
+                                            margin: const EdgeInsets.all(16),
+                                            duration: const Duration(seconds: 3),
+                                          );
+                                        } else if (controller.error.value != null && controller.error.value!.isNotEmpty) {
+                                          Get.snackbar(
+                                            'Error',
+                                            controller.error.value!,
+                                            snackPosition: SnackPosition.BOTTOM,
+                                            backgroundColor: Colors.redAccent,
+                                            colorText: Colors.white,
+                                            margin: const EdgeInsets.all(16),
+                                            duration: const Duration(seconds: 3),
+                                          );
+                                        }
                                       },
                                     ),
                                   ],
@@ -171,6 +207,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                       ),
                               ),
                             ),
+                            if (controller.loading.value)
+                              Container(
+                                width: 68,
+                                height: 68,
+                                decoration: const BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Colors.black38,
+                                ),
+                                child: const Center(
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                  ),
+                                ),
+                              ),
                             Positioned(
                               right: 0,
                               bottom: 0,
@@ -424,47 +475,191 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildOrdersTab(BuildContext context, AuthController controller) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFEFEFEF)),
-      ),
-      child: Column(
-        children: [
-          const Icon(Icons.receipt_long_outlined, size: 48, color: Colors.black38),
-          const SizedBox(height: 12),
-          const Text(
-            'Order History',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
-          ),
-          const SizedBox(height: 6),
-          const Text(
-            'View all your past orders, shipping status, and order details.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.black54, fontSize: 13),
-          ),
-          const SizedBox(height: 20),
-          SizedBox(
-            width: double.infinity,
-            height: 48,
-            child: ElevatedButton.icon(
-              onPressed: () => Get.to(() => const OrdersScreen(), binding: OrdersBinding()),
-              icon: const Icon(Icons.shopping_bag_outlined),
-              label: const Text('View My Orders', style: TextStyle(fontWeight: FontWeight.w800)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.black,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+  Widget _buildOrdersTab(BuildContext context, AuthController authCtrl) {
+    if (!Get.isRegistered<OrdersController>()) {
+      OrdersBinding().dependencies();
+    }
+    final ordersCtrl = Get.find<OrdersController>();
+
+    return Obx(() {
+      final orders = ordersCtrl.orders;
+      final loading = ordersCtrl.loading.value;
+
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFEFEFEF)),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x08000000),
+              blurRadius: 10,
+              offset: Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Row(
+                  children: [
+                    Icon(Icons.shopping_bag_outlined, size: 20, color: Colors.black),
+                    SizedBox(width: 8),
+                    Text(
+                      'Recent Orders',
+                      style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900),
+                    ),
+                  ],
+                ),
+                TextButton(
+                  onPressed: () => Get.to(() => const OrdersScreen(), binding: OrdersBinding()),
+                  child: const Text('View All', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w800, fontSize: 13)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+
+            if (loading && orders.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 24),
+                child: Center(
+                  child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2),
+                ),
+              )
+            else if (orders.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 10),
+                child: Column(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFF7F7F8),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.receipt_long_outlined, size: 36, color: Colors.black38),
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'No orders yet',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Once you place an order, it will appear here.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.black54, fontSize: 12),
+                    ),
+                  ],
+                ),
+              )
+            else
+              Column(
+                children: orders.take(3).map((ord) {
+                  final id = (ord['number'] ?? ord['id'] ?? ord['_id'] ?? '').toString();
+                  final status = (ord['status'] ?? 'processing').toString().toUpperCase();
+                  final total = (ord['total'] ?? ord['orderTotal'] ?? '0').toString();
+                  final items = (ord['line_items'] ?? ord['items'] ?? []) as List;
+
+                  Color statusBg = Colors.blue.shade50;
+                  Color statusFg = Colors.blue.shade900;
+                  if (status == 'COMPLETED' || status == 'DELIVERED') {
+                    statusBg = Colors.green.shade50;
+                    statusFg = Colors.green.shade800;
+                  } else if (status == 'CANCELLED' || status == 'FAILED') {
+                    statusBg = Colors.red.shade50;
+                    statusFg = Colors.red.shade800;
+                  }
+
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFAFAFA),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFEEEEEE)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'ORDER #$id',
+                              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 0.5),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: statusBg,
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                status,
+                                style: TextStyle(color: statusFg, fontWeight: FontWeight.w800, fontSize: 10),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              '${items.length} Item${items.length == 1 ? '' : 's'}',
+                              style: const TextStyle(color: Colors.black54, fontSize: 12),
+                            ),
+                            Text(
+                              '₹$total',
+                              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton(
+                            onPressed: () => Get.to(() => OrderViewScreen(orderId: id, order: ord)),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.black,
+                              side: const BorderSide(color: Colors.black12),
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                            child: const Text('View Order Details', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ),
+
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              height: 46,
+              child: ElevatedButton.icon(
+                onPressed: () => Get.to(() => const OrdersScreen(), binding: OrdersBinding()),
+                icon: const Icon(Icons.receipt_long, size: 18),
+                label: const Text('VIEW ALL ORDERS', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13, letterSpacing: 0.5)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.black,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
               ),
             ),
-          ),
-        ],
-      ),
-    );
+          ],
+        ),
+      );
+    });
   }
 }
 

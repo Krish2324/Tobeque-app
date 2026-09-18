@@ -174,18 +174,20 @@ class CartController extends GetxController {
 
   // ---------- Helpers ----------
   String? pickCartImage(Map<String, dynamic> item) {
+    final thumb = (item['thumbnail'] ?? item['thumbnailImage'] ?? item['featuredImage'] ?? item['image'])?.toString();
+    if (thumb != null && thumb.trim().isNotEmpty) {
+      return ApiConstant.getImageUrl(thumb.trim());
+    }
     final imgs = (item['images'] as List?) ?? const [];
     if (imgs.isNotEmpty) {
-      final m = (imgs.first as Map).cast<String, dynamic>();
-      final src = m['src']?.toString();
-      if (src != null && src.isNotEmpty) return src;
-      final thumb = m['thumbnail']?.toString();
-      if (thumb != null && thumb.isNotEmpty) return thumb;
+      final first = imgs.first;
+      if (first is Map) {
+        final src = (first['imageUrl'] ?? first['url'] ?? first['src'] ?? first['thumbnail'])?.toString();
+        if (src != null && src.isNotEmpty) return ApiConstant.getImageUrl(src);
+      } else if (first is String && first.isNotEmpty) {
+        return ApiConstant.getImageUrl(first);
+      }
     }
-    final thumb = item['thumbnail']?.toString();
-    if (thumb != null && thumb.isNotEmpty) return thumb;
-    final feat = item['featured_image']?.toString();
-    if (feat != null && feat.isNotEmpty) return feat;
     return null;
   }
 

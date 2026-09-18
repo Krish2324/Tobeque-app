@@ -144,16 +144,19 @@ class SearchScreen extends GetView<SearchController> {
             () => ProductDetailPage(key: ValueKey(id), productId: id),
             binding: ProductDetailBinding(id),
           );},
-                              child: SmallTile(p: p,));
+                              child: SmallTile(
+                                p: p,
+                                targetColor: controller.query.value,
+                              ));
                           },
                           childCount: items.length,
                         ),
                         gridDelegate:
-                             SliverGridDelegateWithFixedCrossAxisCount(
-                       crossAxisCount:  2 ,
-                  mainAxisSpacing: 12,
-                  crossAxisSpacing: 4,
-                   childAspectRatio: 0.51,
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          mainAxisSpacing: 14,
+                          crossAxisSpacing: 10,
+                          childAspectRatio: 0.54,
                         ),
                       ),
                     ),

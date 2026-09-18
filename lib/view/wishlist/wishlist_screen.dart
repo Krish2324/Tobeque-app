@@ -318,10 +318,12 @@ class _SuggestTile extends GetView<CartController> {
   @override
   Widget build(BuildContext context) {
     // image
-    final imgs = (p['images'] as List?) ?? const [];
-    String img = '';
-    if (imgs.isNotEmpty && imgs.first is Map) {
-      img = (imgs.first as Map)['src']?.toString() ?? '';
+    String img = (p['thumbnail'] ?? p['thumbnailImage'] ?? p['featuredImage'] ?? p['image'])?.toString() ?? '';
+    if (img.isEmpty) {
+      final imgs = (p['images'] as List?) ?? const [];
+      if (imgs.isNotEmpty && imgs.first is Map) {
+        img = (imgs.first as Map)['src']?.toString() ?? (imgs.first as Map)['imageUrl']?.toString() ?? '';
+      }
     }
     // text
     final name = _decode((p['name'] ?? '').toString());

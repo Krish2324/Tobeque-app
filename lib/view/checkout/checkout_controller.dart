@@ -37,6 +37,7 @@ class CheckoutController extends GetxController {
   final firstName = TextEditingController();
   final lastName  = TextEditingController();
   final company   = TextEditingController();
+  final gstNumber = TextEditingController();
   final country   = TextEditingController(text: 'IN');
   final address1  = TextEditingController();
   final address2  = TextEditingController();
@@ -46,11 +47,15 @@ class CheckoutController extends GetxController {
   final phone     = TextEditingController();
   final email     = TextEditingController();
 
+  final hasCompany = false.obs;
+
   final shipToDifferent = false.obs;
 
   final shippingRates = <Map<String, dynamic>>[].obs;
   final selectedShippingKey = RxnString();
   final shippingCost = 0.0.obs;
+
+  final codFee = 0.0.obs; // COD extra charge fetched from admin settings
 
   final paymentMethods = <Map<String, dynamic>>[
     {'id': 'cod', 'title': 'Cash on Delivery', 'description': 'Pay with cash upon delivery'},
@@ -61,9 +66,16 @@ class CheckoutController extends GetxController {
   final couponCtrl = TextEditingController();
   final noteCtrl = TextEditingController();
 
+  // Coupon state
+  final couponLoading = false.obs;
+  final couponError  = RxnString();
+  final couponSuccess = RxnString();
+
   final fetchingPincode = false.obs;
   final pincodeStatusMsg = RxnString();
   final pincodeValid = RxnBool();
+  final availableAreas = <Map<String, dynamic>>[].obs;
+  final selectedArea = Rxn<Map<String, dynamic>>();
 
   void useSaved(bool isBilling) {
     final addr = isBilling ? savedBilling : savedShipping;
@@ -74,17 +86,21 @@ class CheckoutController extends GetxController {
     state.text = (addr['state'] ?? '').toString();
     postcode.text = (addr['postcode'] ?? addr['zip'] ?? '').toString();
     phone.text = (addr['phone'] ?? '').toString();
+    company.text = (addr['company'] ?? '').toString();
+    gstNumber.text = (addr['gstNumber'] ?? '').toString();
     selectedSaved.value = isBilling ? 0 : 1;
     if (postcode.text.trim().length == 6) {
-      lookupPincode(postcode.text.trim());
+      lookupPincode(postcode.text.trim(), autoOpenModal: false);
     }
   }
 
-  Future<void> lookupPincode(String code) async {
+  Future<void> lookupPincode(String code, {bool autoOpenModal = true}) async {
     final trimmed = code.trim();
     if (trimmed.length != 6 || int.tryParse(trimmed) == null) {
       pincodeValid.value = null;
       pincodeStatusMsg.value = null;
+      availableAreas.clear();
+      selectedArea.value = null;
       return;
     }
 
@@ -99,7 +115,11 @@ class CheckoutController extends GetxController {
         if (resObj is Map && resObj['Status'] == 'Success') {
           final poList = resObj['PostOffice'] as List?;
           if (poList != null && poList.isNotEmpty) {
-            final po = poList.first as Map;
+            final list = poList.map((e) => (e as Map).cast<String, dynamic>()).toList();
+            availableAreas.assignAll(list);
+
+            final po = list.first;
+            selectedArea.value = po;
             final fetchedCity = (po['District'] ?? po['Block'] ?? po['Name'] ?? '').toString();
             final fetchedState = (po['State'] ?? '').toString();
             final fetchedCountry = (po['Country'] ?? 'India').toString();
@@ -109,19 +129,242 @@ class CheckoutController extends GetxController {
             if (fetchedCountry.isNotEmpty) country.text = fetchedCountry;
 
             pincodeValid.value = true;
-            pincodeStatusMsg.value = '$fetchedCity, $fetchedState ($fetchedCountry)';
+            final areaName = (po['Name'] ?? '').toString();
+            pincodeStatusMsg.value = '$areaName, $fetchedCity';
+
+            if (autoOpenModal && list.isNotEmpty) {
+              openAreaSelectionModal();
+            }
             return;
           }
         }
       }
       pincodeValid.value = false;
       pincodeStatusMsg.value = 'Invalid or unserviceable pincode';
+      availableAreas.clear();
+      selectedArea.value = null;
     } catch (_) {
       pincodeValid.value = false;
       pincodeStatusMsg.value = 'Pincode lookup error';
+      availableAreas.clear();
+      selectedArea.value = null;
     } finally {
       fetchingPincode.value = false;
     }
+  }
+
+  void openAreaSelectionModal() {
+    if (availableAreas.isEmpty) return;
+
+    final searchCtrl = TextEditingController();
+    final filteredAreas = <Map<String, dynamic>>[...availableAreas].obs;
+
+    Get.bottomSheet(
+      Builder(
+        builder: (context) {
+          return Container(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.75,
+            ),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Handle bar
+                Center(
+                  child: Container(
+                    width: 38, height: 4,
+                    decoration: BoxDecoration(color: const Color(0xFFE5E7EB), borderRadius: BorderRadius.circular(2)),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Header
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(color: const Color(0xFFF3F4F6), borderRadius: BorderRadius.circular(8)),
+                      child: const Icon(Icons.location_on, color: Colors.black, size: 20),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Select Locality / Area',
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.black),
+                          ),
+                          Text(
+                            'PIN ${postcode.text} • ${availableAreas.length} area(s) found',
+                            style: const TextStyle(fontSize: 11.5, color: Colors.black54),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () {
+                        if (Navigator.canPop(context)) {
+                          Navigator.of(context).pop();
+                        } else {
+                          Get.back();
+                        }
+                      },
+                      icon: const Icon(Icons.close, size: 20, color: Colors.black54),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+
+                // Search filter if more than 4 areas
+                if (availableAreas.length > 4) ...[
+                  TextField(
+                    controller: searchCtrl,
+                    onChanged: (q) {
+                      final query = q.trim().toLowerCase();
+                      if (query.isEmpty) {
+                        filteredAreas.assignAll(availableAreas);
+                      } else {
+                        filteredAreas.assignAll(availableAreas.where((a) {
+                          final name = (a['Name'] ?? '').toString().toLowerCase();
+                          final dist = (a['District'] ?? '').toString().toLowerCase();
+                          return name.contains(query) || dist.contains(query);
+                        }).toList());
+                      }
+                    },
+                    decoration: InputDecoration(
+                      hintText: 'Search locality name…',
+                      hintStyle: const TextStyle(fontSize: 12.5, color: Color(0xFF9CA3AF)),
+                      prefixIcon: const Icon(Icons.search, size: 18, color: Color(0xFF6B7280)),
+                      isDense: true,
+                      filled: true,
+                      fillColor: const Color(0xFFF9FAFB),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE5E7EB))),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Colors.black)),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+
+                const Divider(height: 1, color: Color(0xFFEEEEEE)),
+                const SizedBox(height: 6),
+
+                // List of localities
+                Flexible(
+                  child: Obx(() {
+                    if (filteredAreas.isEmpty) {
+                      return const Padding(
+                        padding: EdgeInsets.all(24),
+                        child: Center(
+                          child: Text('No localities found', style: TextStyle(color: Colors.black54)),
+                        ),
+                      );
+                    }
+
+                    return ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: filteredAreas.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFFF3F4F6)),
+                      itemBuilder: (_, index) {
+                        final item = filteredAreas[index];
+                        final areaName = (item['Name'] ?? '').toString();
+                        final district = (item['District'] ?? item['Block'] ?? '').toString();
+                        final stateName = (item['State'] ?? '').toString();
+                        final branchType = (item['BranchType'] ?? 'Post Office').toString();
+
+                        final isSelected = selectedArea.value != null
+                            ? selectedArea.value!['Name'] == areaName
+                            : index == 0;
+
+                        return InkWell(
+                          onTap: () {
+                            selectArea(item);
+                            if (Navigator.canPop(context)) {
+                              Navigator.of(context).pop();
+                            } else {
+                              Get.back();
+                            }
+                          },
+                          borderRadius: BorderRadius.circular(8),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: isSelected ? Colors.black : const Color(0xFFF3F4F6),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Icon(
+                                    Icons.near_me,
+                                    size: 16,
+                                    color: isSelected ? Colors.white : Colors.black54,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        areaName,
+                                        style: TextStyle(
+                                          fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                                          fontSize: 13.5,
+                                          color: Colors.black,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        '$branchType • $district, $stateName',
+                                        style: const TextStyle(fontSize: 11.5, color: Colors.black54),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                if (isSelected)
+                                  const Icon(Icons.check_circle, color: Colors.black, size: 20)
+                                else
+                                  const Icon(Icons.chevron_right, color: Colors.black26, size: 18),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                  }),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+      isScrollControlled: true,
+    );
+  }
+
+  void selectArea(Map<String, dynamic> item) {
+    selectedArea.value = item;
+    final areaName = (item['Name'] ?? '').toString();
+    final district = (item['District'] ?? item['Block'] ?? '').toString();
+    final stateName = (item['State'] ?? '').toString();
+
+    if (district.isNotEmpty) city.text = district;
+    if (stateName.isNotEmpty) state.text = stateName;
+
+    address2.text = areaName;
+    pincodeStatusMsg.value = '$areaName, $district';
   }
 
   String addressPretty(Map<String, dynamic> a) {
@@ -140,6 +383,11 @@ class CheckoutController extends GetxController {
   @override
   void onInit() {
     super.onInit();
+    company.addListener(() {
+      hasCompany.value = company.text.trim().isNotEmpty;
+    });
+    // Recalculate totals whenever payment method changes (COD fee in/out)
+    ever(selectedPaymentId, (_) => _recalculateTotals());
     _bootstrap();
   }
 
@@ -147,12 +395,24 @@ class CheckoutController extends GetxController {
     loading(true);
     error.value = null;
     try {
+      await _fetchPublicSettings();
       await _loadCartItems();
       await _whoAmI();
     } catch (e) {
       error.value = e.toString();
     } finally {
       loading(false);
+    }
+  }
+
+  Future<void> _fetchPublicSettings() async {
+    try {
+      final res = await api.getApi(ApiConstant.publicSettings) as Map;
+      final settings = (res['settings'] as Map?)?.cast<String, dynamic>() ?? {};
+      final fee = double.tryParse(settings['codFee']?.toString() ?? '0') ?? 0.0;
+      codFee.value = fee;
+    } catch (_) {
+      // Non-critical: just leave codFee at 0
     }
   }
 
@@ -194,7 +454,8 @@ class CheckoutController extends GetxController {
         : Get.put(CartService(), permanent: true);
 
     final subtotalVal = cartService.totalPrice;
-    final finalTotal = (subtotalVal + shippingCost.value - discountAmount.value).clamp(0.0, double.infinity);
+    final appliedCodFee = (selectedPaymentId.value == 'cod') ? codFee.value : 0.0;
+    final finalTotal = (subtotalVal + shippingCost.value + appliedCodFee - discountAmount.value).clamp(0.0, double.infinity);
 
     totals.value = {
       'subtotal': subtotalVal,
@@ -222,22 +483,31 @@ class CheckoutController extends GetxController {
       state.text = (user['state'] ?? '').toString();
       postcode.text = (user['zipCode'] ?? '').toString();
       if (postcode.text.trim().length == 6) {
-        lookupPincode(postcode.text.trim());
+        lookupPincode(postcode.text.trim(), autoOpenModal: false);
       }
     } catch (_) {
       me.value = null;
     }
   }
 
-  Map<String, dynamic> _buildAddress() => {
-        'name': '${firstName.text.trim()} ${lastName.text.trim()}'.trim(),
-        'phone': phone.text.trim(),
-        'street': address1.text.trim(),
-        'city': city.text.trim(),
-        'state': state.text.trim(),
-        'zip': postcode.text.trim(),
-        'country': country.text.trim().isNotEmpty ? country.text.trim() : 'India',
-      };
+  Map<String, dynamic> _buildAddress() {
+    final comp = company.text.trim();
+    final gst = gstNumber.text.trim();
+    return {
+      'name': '${firstName.text.trim()} ${lastName.text.trim()}'.trim(),
+      'phone': phone.text.trim(),
+      'email': email.text.trim(),
+      'street': address1.text.trim(),
+      'street2': address2.text.trim(),
+      'locality': selectedArea.value?['Name'] ?? address2.text.trim(),
+      'company': comp,
+      'gstNumber': comp.isNotEmpty ? gst : '',
+      'city': city.text.trim(),
+      'state': state.text.trim(),
+      'zip': postcode.text.trim(),
+      'country': country.text.trim().isNotEmpty ? country.text.trim() : 'India',
+    };
+  }
 
   List<Map<String, dynamic>> _buildOrderItems() {
     final cartService = Get.isRegistered<CartService>()
@@ -263,9 +533,26 @@ class CheckoutController extends GetxController {
   }
 
   Future<void> applyCoupon() async {
-    final code = couponCtrl.text.trim();
-    if (code.isEmpty) return;
-    mutating(true);
+    // Dismiss keyboard
+    FocusManager.instance.primaryFocus?.unfocus();
+
+    final rawCode = couponCtrl.text.trim();
+    final code = rawCode.toUpperCase();
+    if (code.isEmpty) {
+      couponError.value = 'Please enter a coupon code.';
+      couponSuccess.value = null;
+      return;
+    }
+    if (appliedCoupons.isNotEmpty) {
+      couponError.value = 'Remove the current coupon before applying a new one.';
+      couponSuccess.value = null;
+      return;
+    }
+
+    couponLoading.value = true;
+    couponError.value  = null;
+    couponSuccess.value = null;
+
     try {
       final cartService = Get.isRegistered<CartService>()
           ? Get.find<CartService>()
@@ -280,35 +567,44 @@ class CheckoutController extends GetxController {
       if (res['coupon'] != null) {
         final couponData = res['coupon'] as Map;
         final String couponCodeStr = (couponData['code'] ?? code).toString();
-        final String type = (couponData['type'] ?? 'fixed').toString();
+        final String type = (couponData['type'] ?? 'fixed').toString().toLowerCase();
         final num discValue = (couponData['discountValue'] as num?) ?? 0;
 
         double computedDiscount = 0.0;
         if (type == 'percentage') {
           computedDiscount = (subtotalVal * discValue.toDouble()) / 100.0;
         } else {
+          // handles both 'fixed' and 'flat'
           computedDiscount = discValue.toDouble();
         }
-        if (computedDiscount > subtotalVal) {
-          computedDiscount = subtotalVal;
-        }
+        if (computedDiscount > subtotalVal) computedDiscount = subtotalVal;
 
         discountAmount.value = computedDiscount;
         appliedCoupons.assignAll([couponCodeStr]);
         _recalculateTotals();
 
-        Get.snackbar('Coupon Applied', 'Coupon $couponCodeStr applied successfully!');
+        final savedStr = formatPrice(computedDiscount);
+        couponSuccess.value = 'Coupon "$couponCodeStr" applied! You save $savedStr.';
+        couponCtrl.clear();
+      } else {
+        couponError.value = 'Coupon could not be applied. Please try again.';
       }
     } catch (e) {
-      Get.snackbar('Coupon Error', e.toString().replaceAll('Exception: ', ''));
+      final msg = e.toString()
+          .replaceAll('Exception: ', '')
+          .replaceAll('FatchDataException: ', '')
+          .replaceAll('InvalidInputException: ', '');
+      couponError.value = msg;
     } finally {
-      mutating(false);
+      couponLoading.value = false;
     }
   }
 
   Future<void> removeCoupon(String code) async {
     appliedCoupons.remove(code);
     discountAmount.value = 0.0;
+    couponSuccess.value = null;
+    couponError.value  = null;
     _recalculateTotals();
     couponCtrl.clear();
   }
@@ -439,6 +735,7 @@ class CheckoutController extends GetxController {
           'paymentMethod':   'cod',
           'notes':           noteCtrl.text.trim(),
           'shippingCost':    shippingCost.value,
+          'codFee':          codFee.value,
         };
 
         final res     = await api.postApi(body, ApiConstant.placeOrder);
@@ -551,7 +848,7 @@ class CheckoutController extends GetxController {
   @override
   void onClose() {
     _razorpay?.clear();
-    firstName.dispose(); lastName.dispose(); company.dispose(); country.dispose();
+    firstName.dispose(); lastName.dispose(); company.dispose(); gstNumber.dispose(); country.dispose();
     address1.dispose(); address2.dispose(); city.dispose(); state.dispose();
     postcode.dispose(); phone.dispose(); email.dispose();
     couponCtrl.dispose(); noteCtrl.dispose();

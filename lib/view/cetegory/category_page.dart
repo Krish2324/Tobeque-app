@@ -6,7 +6,6 @@ import 'package:tobeque/view/prodduct_details/product_details_page.dart';
 import 'package:tobeque/view/wishlist/wish_button.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:shimmer/shimmer.dart';
 import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:tobeque/constants/api_constants.dart';
@@ -163,14 +162,73 @@ bool _productHasAnySize(Map p, Set<String> want) {
 
 
   // ---------- SUBCATEGORIES ----------
-Future<void> _fetchSubcategories() async {
-  try {
-    _subcats = await repo.fetchSubcategories(parentId: _currentCatId);
-  } catch (_) {
-    _subcats = const [];
+  Future<void> _fetchSubcategories() async {
+    try {
+      final allCats = await repo.fetchSubcategories(parentId: _currentCatId);
+      List<Map<String, dynamic>> subs = [];
+
+      List<Map<String, dynamic>> flatList = [];
+      void flatten(List<dynamic> list) {
+        for (final item in list) {
+          if (item is Map) {
+            final map = item.cast<String, dynamic>();
+            flatList.add(map);
+            if (map['subcategories'] is List && (map['subcategories'] as List).isNotEmpty) {
+              flatten(map['subcategories']);
+            }
+          }
+        }
+      }
+      flatten(allCats);
+
+      if (_currentCatId != 'all' && _currentCatId.isNotEmpty) {
+        final match = flatList.firstWhere(
+          (c) => (c['_id'] ?? c['id'] ?? '').toString() == _currentCatId,
+          orElse: () => <String, dynamic>{},
+        );
+
+        if (match.isNotEmpty && match['subcategories'] is List && (match['subcategories'] as List).isNotEmpty) {
+          subs = (match['subcategories'] as List)
+              .whereType<Map>()
+              .map((e) => e.cast<String, dynamic>())
+              .toList();
+        } else {
+          subs = flatList.where((c) {
+            final parentId = c['parent'] is Map
+                ? (c['parent']['_id'] ?? c['parent']['id'] ?? '').toString()
+                : (c['parent'] ?? c['parentCategory'] ?? c['parentId'] ?? '').toString();
+            final cid = (c['_id'] ?? c['id'] ?? '').toString();
+            return parentId == _currentCatId && cid != _currentCatId;
+          }).toList();
+
+          if (subs.isEmpty && match.isNotEmpty) {
+            final currentParentId = match['parent'] is Map
+                ? (match['parent']['_id'] ?? match['parent']['id'] ?? '').toString()
+                : (match['parent'] ?? match['parentCategory'] ?? match['parentId'] ?? '').toString();
+
+            if (currentParentId.isNotEmpty && currentParentId != 'null' && currentParentId != '0') {
+              final parentMatch = flatList.firstWhere(
+                (c) => (c['_id'] ?? c['id'] ?? '').toString() == currentParentId,
+                orElse: () => <String, dynamic>{},
+              );
+              if (parentMatch.isNotEmpty && parentMatch['subcategories'] is List) {
+                subs = (parentMatch['subcategories'] as List)
+                    .whereType<Map>()
+                    .map((e) => e.cast<String, dynamic>())
+                    .toList();
+              }
+            }
+          }
+        }
+      } else {
+        subs = allCats;
+      }
+      _subcats = subs;
+    } catch (_) {
+      _subcats = const [];
+    }
+    if (mounted) setState(() {});
   }
-  if (mounted) setState(() {});
-}
 
 
 
@@ -292,7 +350,7 @@ print(_all);
                                     fontWeight: FontWeight.w600,
                                   ),
                                   shape: StadiumBorder(
-                                    side: BorderSide(color: Colors.black.withOpacity(.12)),
+                                    side: BorderSide(color: Colors.black.withValues(alpha: .12)),
                                   ),
                                 ),
                             ],
@@ -363,7 +421,7 @@ print(_all);
                                     fontWeight: FontWeight.w700,
                                   ),
                                   shape: StadiumBorder(
-                                    side: BorderSide(color: Colors.black.withOpacity(.12)),
+                                    side: BorderSide(color: Colors.black.withValues(alpha: .12)),
                                   ),
                                 );
                               }).toList(),
@@ -514,53 +572,84 @@ print(_all);
         title: Text(_currentTitle,
           style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
       ),
-// After SliverAppBar(...)
+// Subcategories / Category horizontal pill bar (web style)
 SliverToBoxAdapter(
-  child: (_subcats.isEmpty)
-      ? const SizedBox.shrink()
-      : SizedBox(
-          height: 48,
-          child: ListView.separated(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            scrollDirection: Axis.horizontal,
-            itemCount: _subcats.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 8),
-            itemBuilder: (_, i) {
-              final c = _subcats[i];
-              final id = (c['_id'] ?? c['id'] ?? '').toString();
-              final name = c['name'].toString();
-              final selected = id == _currentCatId;
-
-              return ActionChip(
-                label: Text(
-                  name,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    color: selected ? Colors.white : Colors.black,
-                  ),
-                ),
-                onPressed: () async {
-                  if (id == _currentCatId) return; // already selected
-                  setState(() {
-                    _currentCatId = id; // String MongoDB _id
-                    _currentTitle = name;
-                    loading = true;
-                    products = const []; // optional: clear quickly
-                  });
-                  // jump to top so user sees new list from start
-                  _sc.animateTo(0,
-                      duration: const Duration(milliseconds: 250),
-                      curve: Curves.easeOut);
-                  await _load(id); // reload for chosen subcategory
-                },
-                backgroundColor: selected ? Colors.black : Colors.white,
-                shape: StadiumBorder(
-                  side: BorderSide(color: selected ? Colors.black : Colors.black12),
-                ),
-              );
+  child: SizedBox(
+    height: 48,
+    child: ListView(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      scrollDirection: Axis.horizontal,
+      children: [
+        // ALL PRODUCTS chip
+        Padding(
+          padding: const EdgeInsets.only(right: 8),
+          child: ActionChip(
+            label: Text(
+              'ALL PRODUCTS',
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 10.5,
+                letterSpacing: 0.5,
+                color: _currentCatId == 'all' ? Colors.white : Colors.black,
+              ),
+            ),
+            onPressed: () async {
+              if (_currentCatId == 'all') return;
+              setState(() {
+                _currentCatId = 'all';
+                _currentTitle = 'ALL PRODUCTS';
+                loading = true;
+                products = const [];
+              });
+              _sc.animateTo(0, duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+              await _load('all');
             },
+            backgroundColor: _currentCatId == 'all' ? Colors.black : Colors.white,
+            shape: StadiumBorder(
+              side: BorderSide(color: _currentCatId == 'all' ? Colors.black : Colors.black12),
+            ),
           ),
         ),
+
+        // Subcategory / Category chips
+        ..._subcats.map((c) {
+          final id = (c['_id'] ?? c['id'] ?? '').toString();
+          final name = (c['name'] ?? '').toString();
+          final selected = id == _currentCatId || name.toLowerCase() == _currentTitle.toLowerCase();
+
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: ActionChip(
+              label: Text(
+                name.toUpperCase(),
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 10.5,
+                  letterSpacing: 0.5,
+                  color: selected ? Colors.white : Colors.black,
+                ),
+              ),
+              onPressed: () async {
+                if (selected) return;
+                setState(() {
+                  _currentCatId = id;
+                  _currentTitle = name;
+                  loading = true;
+                  products = const [];
+                });
+                _sc.animateTo(0, duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+                await _load(id);
+              },
+              backgroundColor: selected ? Colors.black : Colors.white,
+              shape: StadiumBorder(
+                side: BorderSide(color: selected ? Colors.black : Colors.black12),
+              ),
+            ),
+          );
+        }),
+      ],
+    ),
+  ),
 ),
 
 
@@ -628,9 +717,9 @@ SliverToBoxAdapter(
               sliver: SliverGrid(
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: grid == GridMode.two ? 2 : 3,
-                  mainAxisSpacing: 12,
+                  mainAxisSpacing: 16,
                   crossAxisSpacing: 12,
-                  childAspectRatio: grid == GridMode.two ? 0.51 : 0.55,
+                  childAspectRatio: grid == GridMode.two ? 0.53 : 0.46,
                 ),
                 delegate: SliverChildBuilderDelegate(
                   (context, i) {
@@ -664,14 +753,8 @@ SliverToBoxAdapter(
               ),
             ),
 
-          const SliverToBoxAdapter(child: SizedBox(height: 110)),
+          const SliverToBoxAdapter(child: SizedBox(height: 24)),
         ],
-      ),
-
-      bottomNavigationBar: _PromoBar(
-        text: 'COMBO WINS UP TO 10% OFF',
-        action: 'Shop now',
-        onTap: () {},
       ),
     );
   }
@@ -697,8 +780,7 @@ SliverToBoxAdapter(
       // Two-up row
       if (i < products.length) {
         final p1 = products[i++];
-        Map<String, dynamic>? p2;
-        if (i < products.length) p2 = products[i++];
+        final Map<String, dynamic>? item2 = (i < products.length) ? products[i++] : null;
         out.add(Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12),
           child: Row(
@@ -715,12 +797,12 @@ SliverToBoxAdapter(
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: (p2 == null)
+                child: (item2 == null)
                     ? const SizedBox.shrink()
                     : SmallTile(
-                        p: p2!,
+                        p: item2,
                         onTap: () {
-                          final id = (p2!['_id'] ?? p2!['id'] ?? '').toString();
+                          final id = (item2['_id'] ?? item2['id'] ?? '').toString();
                           Get.to(() => ProductDetailPage(key: ValueKey(id), productId: id),
                               binding: ProductDetailBinding(id));
                         },
@@ -752,7 +834,6 @@ class SwipeGallery extends StatefulWidget {
 
 class SwipeGalleryState extends State<SwipeGallery> {
   late final PageController _pc;
-  int _index = 0;
 
   @override
   void initState() {
@@ -798,7 +879,6 @@ class SwipeGalleryState extends State<SwipeGallery> {
             physics: const BouncingScrollPhysics(),
             itemCount: urls.length,
             onPageChanged: (i) {
-              setState(() => _index = i);
               _precacheNext(i);
             },
             itemBuilder: (_, i) =>
@@ -838,31 +918,69 @@ String _priceTextFrom(Map p) {
     final sym   = (m['currency_symbol']?.toString() ?? '₹');
     final value = (double.tryParse(raw) ?? 0) / (pow10(minor));
     final fmt   = NumberFormat.decimalPattern();
-    return '$sym${fmt.format(value)}';
+    final res   = '$sym${fmt.format(value)}';
+    return res.replaceFirst(RegExp(r'\.00$'), '').replaceAll('.00', '');
   }
+
+  final directPrice = p['price'] ?? p['salePrice'] ?? p['regularPrice'] ?? p['discountPrice'];
+  if (directPrice != null && directPrice.toString().isNotEmpty) {
+    var pStr = directPrice.toString().trim();
+    if (pStr.endsWith('.00')) pStr = pStr.substring(0, pStr.length - 3);
+    final d = double.tryParse(pStr);
+    if (d != null && d == d.toInt()) pStr = d.toInt().toString();
+    final clean = pStr.replaceFirst(RegExp(r'\.00$'), '').replaceAll('.00', '');
+    if (clean.isNotEmpty && clean != '0') {
+      return '₹$clean';
+    }
+  }
+
   final html = (p['price_html'] ?? p['priceHtml'])?.toString() ?? '';
   var s = html.replaceAll(RegExp(r'<[^>]*>'), '').replaceAll('&nbsp;', ' ');
   s = s.replaceAllMapped(RegExp(r'&#(\d+);'), (m) => String.fromCharCode(int.parse(m[1]!)));
   s = s.replaceFirstMapped(RegExp(r'^([^\d\s]+)(\d)'), (m) => '${m[1]} ${m[2]}');
-  return s.trim();
+  return s.trim().replaceFirst(RegExp(r'\.00$'), '').replaceAll('.00', '');
 }
 
 /* =============================== Tiles =============================== */
-List<String> _imagesFromProduct(Map<String, dynamic> p) {
+List<String> _imagesFromProduct(Map<String, dynamic> p, {String? targetColor}) {
   final imgs = (p['images'] as List? ?? []);
   final urls = <String>[];
 
-  // 1. Extract from featuredImage first if available
-  final feat = _sanitizeUrl(p['featuredImage']?.toString());
-  if (feat != null && feat.isNotEmpty) {
-    urls.add(feat);
+  if (targetColor != null && targetColor.trim().isNotEmpty) {
+    final tc = targetColor.trim().toLowerCase();
+    final colorRegex = RegExp(r'\b' + RegExp.escape(tc) + r'\b', caseSensitive: false);
+
+    // 1. Check gallery images matching targetColor
+    for (final m in imgs) {
+      String? rawSrc;
+      if (m is Map) {
+        rawSrc = (m['imageUrl'] ?? m['url'] ?? m['src'] ?? m['thumbnail'])?.toString();
+      } else if (m != null) {
+        rawSrc = m.toString();
+      }
+      final u = _sanitizeUrl(rawSrc);
+      if (u != null && u.isNotEmpty && colorRegex.hasMatch(u) && !urls.contains(u)) {
+        urls.add(u);
+      }
+    }
+    // 2. Check thumbnail matching targetColor
+    final thumb = _sanitizeUrl((p['thumbnail'] ?? p['thumbnailImage'] ?? p['featuredImage'] ?? p['image'])?.toString());
+    if (thumb != null && thumb.isNotEmpty && colorRegex.hasMatch(thumb) && !urls.contains(thumb)) {
+      urls.add(thumb);
+    }
+  }
+
+  // 1. Extract from thumbnail / thumbnailImage / featuredImage first if available
+  final thumb = _sanitizeUrl((p['thumbnail'] ?? p['thumbnailImage'] ?? p['featuredImage'] ?? p['image'])?.toString());
+  if (thumb != null && thumb.isNotEmpty && !urls.contains(thumb)) {
+    urls.add(thumb);
   }
 
   // 2. Extract from images array
   for (final m in imgs) {
     String? rawSrc;
     if (m is Map) {
-      rawSrc = (m['imageUrl'] ?? m['url'] ?? m['src'])?.toString();
+      rawSrc = (m['imageUrl'] ?? m['url'] ?? m['src'] ?? m['thumbnail'])?.toString();
     } else if (m != null) {
       rawSrc = m.toString();
     }
@@ -884,197 +1002,245 @@ class _BigTile extends StatelessWidget {
   final Map<String, dynamic> p;
   final VoidCallback? onTap;
 
-
   @override
   Widget build(BuildContext context) {
-    final name = (p['name'] as String? ?? '').trim();
-    final imgs = (p['images'] as List? ?? []);
-    final img = imgs.isNotEmpty ? (imgs.first['src']?.toString() ?? '') : '';
+    final name = (HtmlDecode.text(p['name']) as String? ?? '').trim();
     final priceText = _priceTextFrom(p);
- final sources = _imagesFromProduct(p);
+    final sources = _imagesFromProduct(p);
 
-    return Stack(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-            Positioned(
-
-  right: 8,
-  bottom: -3,
-  child: Material(
-    color: Colors.white.withOpacity(0.30),
-    shape: const CircleBorder(),
-    child: Padding(
-      padding: const EdgeInsets.all(2),
-      // We’re on PDP, so we have the product map `p`
-      child: WishButton(
-        id: (p['_id'] ?? p['id'] ?? '').toString(),
-        name: (p['name'] ?? '').toString(),
-        // priceHtml is optional here; pass null or a formatted string if you want
-        image: (p['images'] is List && (p['images'] as List).isNotEmpty)
-            ? (((p['images'] as List).first as Map)['src']?.toString())
-            : null,
-        size: 22,
-        activeColor: Colors.redAccent,
-        inactiveColor: Colors.black54,
-      ),
-    ),
-  ),
-),
-
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-           AspectRatio(
-          aspectRatio: 2.6 / 4,
-          child: InkWell(
-        onTap: onTap,
-        child: SwipeGallery(
-          sources: sources,
-          fit: BoxFit.cover,
-          borderRadius: 0,
-        ),
+        AspectRatio(
+          aspectRatio: 3 / 4,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              InkWell(
+                onTap: onTap,
+                child: SwipeGallery(
+                  sources: sources,
+                  fit: BoxFit.cover,
+                  borderRadius: 4,
+                ),
+              ),
+              Positioned(
+                top: 8,
+                right: 8,
+                child: WishButton(
+                  id: (p['_id'] ?? p['id'] ?? '').toString(),
+                  name: name,
+                  image: sources.isNotEmpty ? sources.first : null,
+                  size: 22,
+                  activeColor: Colors.redAccent,
+                  inactiveColor: Colors.black54,
+                ),
+              ),
+            ],
           ),
         ),
-            const SizedBox(height: 12),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(name,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                                fontWeight: FontWeight.w600,
-                                letterSpacing: .3,
-                                fontSize: 14)),
-                     
-                        Text(priceText,
-                            style: const TextStyle(
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: .3,
-                                fontSize: 14)),
-                      ],
-                    ),
-                  ),
-                 
-                ],
+        const SizedBox(height: 10),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: .3,
+                  fontSize: 14,
+                  color: Colors.black87,
+                ),
               ),
-            ),
-          ],
+              const SizedBox(height: 4),
+              Text(
+                priceText,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: .3,
+                  fontSize: 15,
+                  color: Colors.black,
+                ),
+              ),
+            ],
+          ),
         ),
       ],
     );
   }
 }
 
+Color _parseColorSwatch(String name) {
+  final lower = name.toLowerCase().trim();
+  if (lower.contains('pink')) return const Color(0xFFFFB6C1);
+  if (lower.contains('black')) return Colors.black;
+  if (lower.contains('white')) return Colors.white;
+  if (lower.contains('red')) return const Color(0xFFE53935);
+  if (lower.contains('blue') || lower.contains('navy')) return const Color(0xFF1E88E5);
+  if (lower.contains('green') || lower.contains('olive')) return const Color(0xFF4CAF50);
+  if (lower.contains('yellow')) return const Color(0xFFFFEB3B);
+  if (lower.contains('brown')) return const Color(0xFF795548);
+  if (lower.contains('grey') || lower.contains('gray')) return Colors.grey;
+  if (lower.contains('beige') || lower.contains('cream')) return const Color(0xFFF5F5DC);
+  if (lower.contains('purple') || lower.contains('lavender')) return const Color(0xFF9C27B0);
+  if (lower.contains('orange')) return const Color(0xFFFF9800);
+  if (lower.contains('leopard') || lower.contains('print') || lower.contains('pattern')) return const Color(0xFFD2B48C);
+  if (lower.contains('stripe')) return const Color(0xFF607D8B);
+  return Colors.grey.shade400;
+}
 
-
+List<String> _extractProductColors(Map<String, dynamic> p) {
+  final Set<String> colors = {};
+  if (p['color'] is String && (p['color'] as String).trim().isNotEmpty) {
+    colors.addAll((p['color'] as String).split(',').map((e) => e.trim()));
+  }
+  if (p['colors'] is List) {
+    for (final c in (p['colors'] as List)) {
+      if (c is String && c.trim().isNotEmpty) colors.add(c.trim());
+      else if (c is Map) {
+        final val = (c['name'] ?? c['label'] ?? c['value'] ?? '').toString().trim();
+        if (val.isNotEmpty) colors.add(val);
+      }
+    }
+  }
+  final attrs = (p['attributes'] as List?) ?? const [];
+  for (final a in attrs.whereType<Map>()) {
+    final key = ((a['taxonomy'] ?? a['name'])?.toString() ?? '').toLowerCase();
+    if (key.contains('color') || key == 'pa_color' || key.contains('colour')) {
+      final terms = a['terms'] ?? a['options'] ?? a['options_json'] ?? a['value'];
+      if (terms is List) {
+        for (final t in terms) {
+          if (t is Map) {
+            final val = (t['name'] ?? t['value'] ?? t['label'] ?? '').toString().trim();
+            if (val.isNotEmpty) colors.add(val);
+          } else if (t != null) {
+            final val = t.toString().trim();
+            if (val.isNotEmpty) colors.add(val);
+          }
+        }
+      } else if (terms is String && terms.trim().isNotEmpty) {
+        colors.addAll(terms.split(',').map((e) => e.trim()));
+      }
+    }
+  }
+  final vars = (p['variants'] as List?) ?? (p['variations'] as List?) ?? const [];
+  for (final v in vars.whereType<Map>()) {
+    final c = (v['color'] ?? v['attributes']?['color'] ?? v['attributes']?['pa_color'])?.toString();
+    if (c != null && c.isNotEmpty) colors.add(c.trim());
+  }
+  return colors.where((c) => c.isNotEmpty).toList();
+}
 
 class SmallTile extends StatelessWidget {
-  const SmallTile({required this.p, this.onTap});
+  const SmallTile({required this.p, this.onTap, this.targetColor});
   final Map<String, dynamic> p;
   final VoidCallback? onTap;
+  final String? targetColor;
 
   @override
   Widget build(BuildContext context) {
-    final name = (HtmlDecode.text(p['name'] )as String? ?? '').trim();
+    final name = (HtmlDecode.text(p['name']) as String? ?? '').trim();
     final priceText = _priceTextFrom(p);
-    final sources = _imagesFromProduct(p);
-    // Safely extract first image: supports 'imageUrl', 'url', 'src' keys + featuredImage fallback
-    String? firstImg;
-    if (p['images'] is List && (p['images'] as List).isNotEmpty) {
-      final first = (p['images'] as List).first;
-      if (first is Map) {
-        firstImg = (first['imageUrl'] ?? first['url'] ?? first['src'])?.toString();
-      } else {
-        firstImg = first?.toString();
-      }
-    }
-    firstImg ??= p['featuredImage']?.toString();
+    final sources = _imagesFromProduct(p, targetColor: targetColor);
+    final colorList = _extractProductColors(p);
+    String? firstImg = sources.isNotEmpty ? sources.first : null;
     if (firstImg != null && firstImg.isNotEmpty && !firstImg.startsWith('http')) {
       firstImg = 'https://backend.tobeque.com$firstImg';
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Image area with overlayed heart
-        AspectRatio(
-          aspectRatio: 2 / 2.88,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              // swipeable gallery
-              InkWell(
-                onTap: onTap,
-                child: SwipeGallery(
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Image area with overlayed heart (3:4 ratio)
+          AspectRatio(
+            aspectRatio: 3 / 4,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                SwipeGallery(
                   sources: sources,
                   fit: BoxFit.cover,
-                  borderRadius: 2,
+                  borderRadius: 4,
                 ),
-              ),
-    
-              // ❤️ heart overlay (bottom-right)
-              
-            ],
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: WishButton(
+                    id: (p['_id'] ?? p['id'] ?? '').toString(),
+                    name: name,
+                    image: firstImg,
+                    size: 20,
+                    activeColor: Colors.redAccent,
+                    inactiveColor: Colors.black54,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-    
-       // const SizedBox(height: 6),
-    
-        // Title (flexible, ellipsis)
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.start,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      height: 1.1,
-                      letterSpacing: .3,
-                      fontSize: 12,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    priceText,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w900,
-                      height: 1.2,
-                      letterSpacing: .3,
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
+
+          const SizedBox(height: 8),
+
+          // Title & Price text
+          Text(
+            name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontWeight: FontWeight.w600,
+              height: 1.2,
+              letterSpacing: .2,
+              fontSize: 13,
+              color: Colors.black87,
+            ),
+          ),
+          const SizedBox(height: 3),
+          if (priceText.isNotEmpty)
+            Text(
+              priceText,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontWeight: FontWeight.w800,
+                height: 1.2,
+                letterSpacing: .2,
+                fontSize: 13,
+                color: Colors.black,
               ),
             ),
-            WishButton(
-              id: (p['_id'] ?? p['id'] ?? '').toString(),
-              name: name,
-              image: firstImg,
-              size: 20,
-              activeColor: Colors.redAccent,
-              inactiveColor: Colors.black54,
+          if (colorList.isNotEmpty) ...[
+            const SizedBox(height: 5),
+            Row(
+              children: [
+                ...colorList.take(4).map((cName) => Container(
+                  margin: const EdgeInsets.only(right: 4),
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: _parseColorSwatch(cName),
+                    border: Border.all(
+                      color: _parseColorSwatch(cName) == Colors.white ? Colors.black38 : Colors.black12,
+                      width: 1,
+                    ),
+                  ),
+                )),
+                if (colorList.length > 4)
+                  Text(
+                    '+${colorList.length - 4}',
+                    style: const TextStyle(fontSize: 9, color: Colors.black54, fontWeight: FontWeight.w700),
+                  ),
+              ],
             ),
           ],
-        ),
-    
-     
-      ],
+        ],
+      ),
     );
   }
 }

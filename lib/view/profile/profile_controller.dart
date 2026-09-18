@@ -6,6 +6,7 @@ import 'package:dio/dio.dart';
 import 'package:get/get.dart' hide FormData, MultipartFile;
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:tobeque/services/shared_pref.dart';
 
 /// Your site base
 const _kBaseUrl = 'https://tobeque.com';
@@ -94,7 +95,11 @@ class AuthController extends GetxController {
   String get firstName => userProfileData['firstName']?.toString() ?? '';
   String get lastName => userProfileData['lastName']?.toString() ?? '';
   String get gender => userProfileData['gender']?.toString() ?? '';
-  String get profilePhoto => userProfileData['profilePhoto']?.toString() ?? '';
+  String get profilePhoto {
+    final photo = userProfileData['profilePhoto']?.toString() ?? '';
+    if (photo.isEmpty) return '';
+    return ApiConstant.getImageUrl(photo);
+  }
 
   String get address => userProfileData['address']?.toString() ?? '';
   String get city => userProfileData['city']?.toString() ?? '';
@@ -139,6 +144,7 @@ class AuthController extends GetxController {
         _email = (u['email'] ?? '').toString();
 
         final sp = await SharedPreferences.getInstance();
+        await sp.setString('cached_user_profile', json.encode(u));
         if (_name.isNotEmpty) await sp.setString(_Keys.name, _name);
         if (_email.isNotEmpty) await sp.setString(_Keys.email, _email);
       }
@@ -189,21 +195,34 @@ class AuthController extends GetxController {
    * UPLOAD PROFILE PHOTO
    * --------------------------------------------------------------------- */
   Future<bool> uploadProfilePhoto(String filePath) async {
-    if (_token == null || _token!.isEmpty) return false;
+    if (_token == null || _token!.isEmpty) {
+      error.value = 'User not logged in';
+      return false;
+    }
     loading.value = true;
     error.value = null;
     try {
+      final fileName = filePath.split('/').last.split('\\').last;
       final formData = FormData.fromMap({
-        'photo': await MultipartFile.fromFile(filePath),
+        'photo': await MultipartFile.fromFile(
+          filePath,
+          filename: fileName,
+        ),
       });
       final res = await dio.post(
         '${ApiConstant.apiBase}/user-auth/profile/photo',
         data: formData,
-        options: Options(headers: {'Authorization': 'Bearer $_token'}),
+        options: Options(
+          headers: {'Authorization': 'Bearer $_token'},
+          contentType: 'multipart/form-data',
+        ),
       );
       if (res.data is Map && res.data['user'] != null) {
         final u = Map<String, dynamic>.from(res.data['user'] as Map);
         userProfileData.value = u;
+
+        final sp = await SharedPreferences.getInstance();
+        await sp.setString('cached_user_profile', json.encode(u));
         return true;
       }
       return false;
@@ -274,6 +293,7 @@ class AuthController extends GetxController {
         }
         final sp = await SharedPreferences.getInstance();
         await sp.setString(_Keys.token, token);
+        await SharedPrefService.setToken(token);
         await sp.setString(_Keys.name, _name);
         await sp.setString(_Keys.email, _email);
         loggedIn.value = true;
@@ -647,6 +667,14 @@ class AuthController extends GetxController {
     _email = sp.getString(_Keys.email) ?? '';
     final b = sp.getString(_Keys.billing);
     final s = sp.getString(_Keys.shipping);
+    final cachedProfile = sp.getString('cached_user_profile');
+
+    if (cachedProfile != null && cachedProfile.isNotEmpty) {
+      try {
+        userProfileData.value = Map<String, dynamic>.from(json.decode(cachedProfile) as Map);
+      } catch (_) {}
+    }
+
     if (b != null) _billing  = json.decode(b) as Map<String, dynamic>;
     if (s != null) _shipping = json.decode(s) as Map<String, dynamic>;
 

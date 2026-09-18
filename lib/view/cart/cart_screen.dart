@@ -11,6 +11,7 @@ import 'package:get/get.dart';
 
 import 'package:tobeque/view/cart/cart_controller.dart';
 import 'package:tobeque/view/cart/cart_binding.dart';
+import 'package:tobeque/view/cetegory/category_page.dart';
 import 'package:tobeque/view/prodduct_details/product_details_page.dart';
 
 class CartScreen extends GetView<CartController> {
@@ -85,7 +86,9 @@ if (items.isEmpty) {
                     children: [
                       Expanded(
                         child: ElevatedButton(
-                          onPressed: Get.back, // or route to your Home/Shop page
+                          onPressed: () {
+                            Get.to(() => const CategoryPage(categoryId: 'all', title: 'ALL PRODUCTS'));
+                          },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.black,
                             foregroundColor: Colors.white,
@@ -347,7 +350,7 @@ if (items.isEmpty) {
                       children: [
                         Positioned.fill(
                             child: Container(
-                                color: Colors.black.withOpacity(0.04))),
+                                color: Colors.black.withValues(alpha: 0.04))),
                         Positioned.fill(
                           child: BackdropFilter(
                             filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
@@ -466,58 +469,76 @@ class _FreeDeliveryBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-   return Material(
-  color: Colors.transparent,
-  child: InkWell(
-    borderRadius: BorderRadius.circular(10),
-    onTap: () => Get.to(() => const WishlistScreen()),
-    child: Container(
-      margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
-      decoration: BoxDecoration(
-        color: const Color(0xffecfff1),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xffd7f5de)),
-      ),
-      child: Row(
-        children: [
-          const Text(
-            'OMG!',
-            style: TextStyle(
-              color: Color(0xff0a8f3f),
-              fontWeight: FontWeight.w900,
-              letterSpacing: .5,
-                fontSize: 12,
-            ),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: () => Get.to(() => const WishlistScreen()),
+        child: Container(
+          margin: const EdgeInsets.fromLTRB(16, 6, 16, 4),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: const Color(0xfff0fdf4),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xffdcfce7)),
           ),
-          const SizedBox(width: 5),
-          const Expanded(
-            child: Text(
-              'FREE STANDARD DELIVERY!',
-              style: TextStyle(
-                color: Color(0xff0a8f3f),
-                fontWeight: FontWeight.w900,
-                fontSize: 13.5,
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xff16a34a),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Text(
+                  'OMG!',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 9.5,
+                    letterSpacing: .4,
+                  ),
+                ),
               ),
-            ),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'FREE STANDARD DELIVERY!',
+                  style: TextStyle(
+                    color: Color(0xff15803d),
+                    fontWeight: FontWeight.w700,
+                    fontSize: 11.5,
+                    letterSpacing: .2,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  border: Border.all(color: const Color(0xff86efac)),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.favorite_border, size: 13, color: Color(0xff15803d)),
+                    SizedBox(width: 4),
+                    Text(
+                      'WISHLIST',
+                      style: TextStyle(
+                        color: Color(0xff15803d),
+                        fontWeight: FontWeight.w700,
+                        fontSize: 10,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-         //const SizedBox(width: 8),
-          OutlinedButton.icon(
-            onPressed: () => Get.to(() => const WishlistScreen()),
-            icon: const Icon(Icons.favorite_border, size: 16),
-            label: const Text('WISHLIST'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: const Color(0xff0a8f3f),
-              side: const BorderSide(color: Color(0xff0a8f3f)),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              visualDensity: VisualDensity.compact,
-            ),
-          ),
-        ],
+        ),
       ),
-    ),
-  ),
-);
+    );
   }
 }
 
@@ -609,10 +630,12 @@ class SuggestStrip extends GetView<CartController> {
           final p = items[i];
 
           // image
-          final images = (p['images'] as List?) ?? const [];
-          String img = '';
-          if (images.isNotEmpty && images.first is Map) {
-            img = (images.first as Map)['src']?.toString() ?? '';
+          String img = (p['thumbnail'] ?? p['thumbnailImage'] ?? p['featuredImage'] ?? p['image'])?.toString() ?? '';
+          if (img.isEmpty) {
+            final images = (p['images'] as List?) ?? const [];
+            if (images.isNotEmpty && images.first is Map) {
+              img = (images.first as Map)['src']?.toString() ?? (images.first as Map)['imageUrl']?.toString() ?? '';
+            }
           }
 
           // name
@@ -713,13 +736,7 @@ class SuggestStrip extends GetView<CartController> {
                                   id: (p['_id'] ?? p['id'] ?? '').toString(),
                                 name: (p['name'] ?? '').toString(),
                                 priceHtml: p['price_html']?.toString(),
-                                image: (() {
-                                  final images = p['images'] as List?;
-                                  if (images != null && images.isNotEmpty && images.first is Map) {
-                                    return (images.first as Map)['src']?.toString();
-                                  }
-                                  return null;
-                                })(),
+                                image: img.isNotEmpty ? img : null,
                               size: 20,                       // adjust if you want bigger/smaller
                               activeColor: Colors.redAccent,  // filled heart color
                               inactiveColor: Colors.black54,  // outline color

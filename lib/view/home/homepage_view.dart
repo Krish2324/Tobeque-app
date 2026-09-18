@@ -90,15 +90,15 @@ class HomePageView extends StatelessWidget {
               shadowColor: Colors.transparent,
               surfaceTintColor: Colors.transparent,
               scrolledUnderElevation: 0,
-              foregroundColor: Colors.white,
+              foregroundColor: Colors.black,
               flexibleSpace: FlexibleSpaceBar(
                 centerTitle: true,
                 expandedTitleScale: 2.2,
-                title:  Text(
+                title: const Text(
                   'TOBEQUE',
                   style: TextStyle(
                     fontSize: 30,
-                    color: Colors.white,
+                    color: Colors.black,
                     fontWeight: FontWeight.bold,
                     letterSpacing: 1.2,
                   ),
@@ -134,10 +134,7 @@ SliverToBoxAdapter(
       const SizedBox(height: 18),
       const _SectionHeaderWidget(subtitle: 'Shop By', title: 'Category'),
       const SizedBox(height: 14),
-      Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        child: _CategoryGrid(cats: c.cats),
-      ),
+      _CategoryGrid(cats: c.cats),
       const SizedBox(height: 20),
     ],
   ),
@@ -331,7 +328,7 @@ class _CategoryGridState extends State<_CategoryGrid> {
         child: ListView.separated(
           controller: _scroll,
           scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 4),
+          padding: EdgeInsets.zero,
           physics: const BouncingScrollPhysics(),
           itemCount: virtualCount,
           separatorBuilder: (_, __) => const SizedBox(width: 6),
@@ -825,10 +822,7 @@ class _ProductCardState extends State<_ProductCard> {
     final stripped = html.replaceAll(RegExp(r'<[^>]*>'), '');
     var decoded = _decodeEntities(stripped).trim();
     decoded = decoded.replaceFirstMapped(RegExp(r'^([^\d\s]+)(\d)'), (m) => '${m[1]} ${m[2]}');
-    if (!decoded.contains('.')) {
-      return '$decoded.00';
-    }
-    return decoded;
+    return decoded.replaceFirst(RegExp(r'\.00$'), '').replaceAll('.00', '');
   }
 
   @override
@@ -836,9 +830,15 @@ class _ProductCardState extends State<_ProductCard> {
     final p = widget.p;
     final name  = _decodeEntities(p.name).trim();
     final price = _priceFor(p);
-    final imgList = p.images.isNotEmpty 
-        ? p.images 
-        : (p.image != null && p.image!.isNotEmpty ? [p.image!] : <String>[]);
+    final List<String> imgList = [];
+    if (p.image != null && p.image!.isNotEmpty) {
+      imgList.add(p.image!);
+    }
+    for (final img in p.images) {
+      if (img.isNotEmpty && !imgList.contains(img)) {
+        imgList.add(img);
+      }
+    }
 
     Widget imageContent;
     if (imgList.length > 1) {

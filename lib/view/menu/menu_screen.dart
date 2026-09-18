@@ -80,15 +80,6 @@ class _MenuScreenState extends State<MenuScreen> {
     if (mounted) setState(() => _loading = false);
   }
 
-  WcCat? _findRoot(String label) {
-    final l = label.toLowerCase();
-    for (final c in _all) {
-      if ((c.parent == '' || c.parent == '0') &&
-          (c.name.toLowerCase() == l || c.slug.toLowerCase() == l)) return c;
-    }
-    return null;
-  }
-
   WcCat? _findByNameStarts(String prefix, {String? withinParent}) {
     final p = prefix.toLowerCase();
     for (final c in _all) {
@@ -120,9 +111,25 @@ class _MenuScreenState extends State<MenuScreen> {
       );
     }
 
-    // Top-level categories (no parent)
+    int categorySeq(String name) {
+      final n = name.toUpperCase().trim();
+      if (n == 'TOPS' || n.startsWith('TOP')) return 1;
+      if (n.contains('T-SHIRT') || n.contains('VEST')) return 2;
+      if (n.contains('SHIRT') || n.contains('BLOUSE')) return 3;
+      if (n.contains('DRESS')) return 4;
+      if (n.contains('SKIRT') || n.contains('SHORT')) return 5;
+      if (n.contains('JEAN') || n.contains('PANT') || n.contains('TROUSER')) return 6;
+      return 100;
+    }
+
+    // Top-level categories (no parent) sorted in exact sequence
     final topCats = _all.where((c) => c.parent == '' || c.parent == '0').toList()
-      ..sort((a, b) => a.name.compareTo(b.name));
+      ..sort((a, b) {
+        final sa = categorySeq(a.name);
+        final sb = categorySeq(b.name);
+        if (sa != sb) return sa.compareTo(sb);
+        return a.name.compareTo(b.name);
+      });
 
     final root     = topCats.isNotEmpty ? topCats.first : null;
     final newCat   = _findByNameStarts('new',     withinParent: root?.id);
@@ -184,13 +191,6 @@ class _MenuScreenState extends State<MenuScreen> {
 
                     const SizedBox(height: 8),
 
-                    // VIEW ALL
-                    if (root != null)
-                      _MenuRow(
-                        title: 'VIEW ALL',
-                        onTap: () => Get.to(() => CategoryPage(categoryId: root.id, title: root.name)),
-                      ),
-
                     // All categories with expandable subcategories
                     ...topCats.map((c) {
                       final subs   = _childrenOf(c.id);
@@ -205,6 +205,12 @@ class _MenuScreenState extends State<MenuScreen> {
                         }),
                       );
                     }),
+
+                    // ALL PRODUCTS at the last of category list
+                    _MenuRow(
+                      title: 'ALL PRODUCTS',
+                      onTap: () => Get.to(() => const CategoryPage(categoryId: 'all', title: 'All Products')),
+                    ),
 
                     const SizedBox(height: 20),
                     const Divider(height: 1, color: Color(0xFFEEEEEE)),
@@ -233,11 +239,8 @@ class _MenuScreenState extends State<MenuScreen> {
                       icon: Icons.star_border_outlined,
                       title: 'Featured Collections',
                       subtitle: 'Curated picks by our team',
-                      onTap: () => Get.toNamed('/home'),
+                      onTap: () => Get.to(() => const CategoryPage(categoryId: 'all', title: 'Featured Collections')),
                     ),
-
-                    const SizedBox(height: 8),
-                    const Divider(height: 1, color: Color(0xFFEEEEEE)),
 
                     // ── Help & Info section ─────────────────────────────────
                     Padding(
@@ -281,7 +284,7 @@ class _MenuScreenState extends State<MenuScreen> {
                       icon: Icons.phone_outlined,
                       title: 'Call / WhatsApp',
                       subtitle: 'Talk to us directly',
-                      onTap: () => launchEmail(Constent.email),
+                      onTap: () => _showContactSheet(context),
                     ),
 
                     const SizedBox(height: 40),
@@ -292,6 +295,74 @@ class _MenuScreenState extends State<MenuScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  void _showContactSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: false,
+      useSafeArea: true,
+      backgroundColor: Colors.white,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 12),
+              const Text(
+                'Contact us',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black,
+                ),
+              ),
+              const SizedBox(height: 16),
+              ListTile(
+                leading: const Icon(Icons.call_outlined, color: Colors.black),
+                title: Text(
+                  'Call ${Constent.phone.trim()}',
+                  style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.black),
+                ),
+                subtitle: const Text('From Monday to Saturday from 09:00 to 18:00'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  launchPhoneCall(Constent.phone, context: context);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.chat_bubble_outline_rounded, color: Colors.black),
+                title: const Text(
+                  'Start WhatsApp chat',
+                  style: TextStyle(fontWeight: FontWeight.w600, color: Colors.black),
+                ),
+                subtitle: const Text('From Monday to Saturday from 09:00 to 17:30'),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  final ok = await openWhatsAppChat(
+                    Constent.phone,
+                    message: 'Hello 👋 Need some info.',
+                    defaultCountryCode: '91',
+                  );
+                  if (!ok && context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Could not open WhatsApp on this device')),
+                    );
+                  }
+                },
+              ),
+              const SizedBox(height: 24),
+            ],
+          ),
+        );
+      },
     );
   }
 }

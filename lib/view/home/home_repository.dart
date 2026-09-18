@@ -5,6 +5,19 @@ import 'package:tobeque/data/dio_client.dart';
 import 'package:tobeque/services/shared_pref.dart';
 import 'models.dart';
 
+String _cleanPrice(dynamic raw) {
+  if (raw == null) return '0';
+  var s = raw.toString().trim();
+  if (s.endsWith('.00')) {
+    s = s.substring(0, s.length - 3);
+  }
+  final d = double.tryParse(s);
+  if (d != null && d == d.toInt()) {
+    return d.toInt().toString();
+  }
+  return s.replaceFirst(RegExp(r'\.00$'), '').replaceAll('.00', '');
+}
+
 class HomeRepository {
   final Dio _dio = DioClient.build();
 
@@ -167,7 +180,7 @@ class HomeRepository {
   }
 
   Future<List<WcProduct>> fetchBestSellers({int perPage = 50}) async {
-    const key = 'home_bestsellers';
+    const key = 'home_bestsellers_v3';
     if (_cacheMap.containsKey(key) && (_cacheMap[key] as List).isNotEmpty) {
       return List<WcProduct>.from(_cacheMap[key]);
     }
@@ -192,9 +205,11 @@ class HomeRepository {
       }
       final result = list.map<WcProduct>((p) {
         final imageList = <String>[];
-        final feat = ApiConstant.getImageUrl(p['featuredImage']?.toString());
-        if (feat != null && feat.isNotEmpty) {
-          imageList.add(feat);
+        final thumb = ApiConstant.getImageUrl(
+          (p['thumbnail'] ?? p['thumbnailImage'] ?? p['featuredImage'] ?? p['featured_image'] ?? p['coverImage'] ?? p['mainImage'] ?? p['image'] ?? p['imageUrl'])?.toString(),
+        );
+        if (thumb.isNotEmpty) {
+          imageList.add(thumb);
         }
 
         dynamic imgs = p['images'];
@@ -202,12 +217,12 @@ class HomeRepository {
           for (final item in imgs) {
             String? u;
             if (item is Map) {
-              u = (item['imageUrl'] ?? item['url'] ?? item['src'])?.toString();
+              u = (item['imageUrl'] ?? item['url'] ?? item['src'] ?? item['thumbnail'])?.toString();
             } else {
               u = item?.toString();
             }
             final fullUrl = ApiConstant.getImageUrl(u);
-            if (fullUrl != null && fullUrl.isNotEmpty && !imageList.contains(fullUrl)) {
+            if (fullUrl.isNotEmpty && !imageList.contains(fullUrl)) {
               imageList.add(fullUrl);
             }
           }
@@ -218,7 +233,7 @@ class HomeRepository {
         return WcProduct(
           id: (p['_id'] ?? p['id'] ?? '').toString(),
           name: (p['name'] ?? p['title'] ?? '').toString(),
-          priceHtml: '₹${p['price'] ?? p['regularPrice'] ?? 0}',
+          priceHtml: '₹${_cleanPrice(p['price'] ?? p['regularPrice'] ?? 0)}',
           image: primary,
           images: imageList,
         );
@@ -256,7 +271,11 @@ class HomeRepository {
       return cached;
     }
     try {
-      final res = await _dio.get('${ApiConstant.products}?category=$categoryId&page=$page&limit=$perPage');
+      final isAll = categoryId == null || categoryId.toString().isEmpty || categoryId == 'all';
+      final url = isAll
+          ? '${ApiConstant.products}?status=published&page=$page&limit=$perPage'
+          : '${ApiConstant.products}?category=$categoryId&page=$page&limit=$perPage';
+      final res = await _dio.get(url);
       final data = res.data;
       List<Map<String, dynamic>> list = [];
       if (data is Map) {
@@ -276,7 +295,7 @@ class HomeRepository {
 
   // ── NEW: On Sale products ──────────────────────────────────────────────────
   Future<List<WcProduct>> fetchOnSaleProducts({int perPage = 15}) async {
-    const key = 'home_onsale';
+    const key = 'home_onsale_v3';
     if (_cacheMap.containsKey(key) && (_cacheMap[key] as List).isNotEmpty) {
       return List<WcProduct>.from(_cacheMap[key]);
     }
@@ -300,24 +319,39 @@ class HomeRepository {
         list = data;
       }
       final result = list.map<WcProduct>((p) {
-        String? img;
+        final imageList = <String>[];
+        final thumb = ApiConstant.getImageUrl(
+          (p['thumbnail'] ?? p['thumbnailImage'] ?? p['featuredImage'] ?? p['featured_image'] ?? p['coverImage'] ?? p['mainImage'] ?? p['image'] ?? p['imageUrl'])?.toString(),
+        );
+        if (thumb.isNotEmpty) {
+          imageList.add(thumb);
+        }
+
         dynamic imgs = p['images'];
-        if (imgs is List && imgs.isNotEmpty) {
-          final first = imgs.first;
-          if (first is Map) {
-            img = (first['imageUrl'] ?? first['url'] ?? first['src'] ?? '').toString();
-          } else {
-            img = first?.toString();
+        if (imgs is List) {
+          for (final item in imgs) {
+            String? u;
+            if (item is Map) {
+              u = (item['imageUrl'] ?? item['url'] ?? item['src'] ?? item['thumbnail'])?.toString();
+            } else {
+              u = item?.toString();
+            }
+            final fullUrl = ApiConstant.getImageUrl(u);
+            if (fullUrl.isNotEmpty && !imageList.contains(fullUrl)) {
+              imageList.add(fullUrl);
+            }
           }
         }
-        if (img == null || img.isEmpty) img = p['featuredImage']?.toString();
-        final salePrice    = p['salePrice'] ?? p['price'] ?? 0;
-        final regularPrice = p['regularPrice'] ?? p['price'] ?? 0;
+
+        final primary = imageList.isNotEmpty ? imageList.first : null;
+        final salePrice    = _cleanPrice(p['salePrice'] ?? p['price'] ?? 0);
+        final regularPrice = _cleanPrice(p['regularPrice'] ?? p['price'] ?? 0);
         return WcProduct(
           id: (p['_id'] ?? p['id'] ?? '').toString(),
           name: (p['name'] ?? p['title'] ?? '').toString(),
           priceHtml: '₹$salePrice',
-          image: ApiConstant.getImageUrl(img),
+          image: primary,
+          images: imageList,
           originalPrice: regularPrice != salePrice ? '₹$regularPrice' : null,
         );
       }).toList();
@@ -331,7 +365,7 @@ class HomeRepository {
 
   // ── NEW: Hot Right Now trending products ───────────────────────────────────
   Future<List<WcProduct>> fetchHotRightNow({int perPage = 10}) async {
-    const key = 'home_hotrightnow';
+    const key = 'home_hotrightnow_v3';
     if (_cacheMap.containsKey(key) && (_cacheMap[key] as List).isNotEmpty) {
       return List<WcProduct>.from(_cacheMap[key]);
     }
@@ -355,27 +389,42 @@ class HomeRepository {
         list = data;
       }
       final result = list.map<WcProduct>((p) {
-        String? img;
+        final imageList = <String>[];
+        final thumb = ApiConstant.getImageUrl(
+          (p['thumbnail'] ?? p['thumbnailImage'] ?? p['featuredImage'] ?? p['featured_image'] ?? p['coverImage'] ?? p['mainImage'] ?? p['image'] ?? p['imageUrl'])?.toString(),
+        );
+        if (thumb.isNotEmpty) {
+          imageList.add(thumb);
+        }
+
         dynamic imgs = p['images'];
-        if (imgs is List && imgs.isNotEmpty) {
-          final first = imgs.first;
-          if (first is Map) {
-            img = (first['imageUrl'] ?? first['url'] ?? first['src'] ?? '').toString();
-          } else {
-            img = first?.toString();
+        if (imgs is List) {
+          for (final item in imgs) {
+            String? u;
+            if (item is Map) {
+              u = (item['imageUrl'] ?? item['url'] ?? item['src'] ?? item['thumbnail'])?.toString();
+            } else {
+              u = item?.toString();
+            }
+            final fullUrl = ApiConstant.getImageUrl(u);
+            if (fullUrl.isNotEmpty && !imageList.contains(fullUrl)) {
+              imageList.add(fullUrl);
+            }
           }
         }
-        if (img == null || img.isEmpty) img = p['featuredImage']?.toString();
+
+        final primary = imageList.isNotEmpty ? imageList.first : null;
         final hotMedia     = p['hotRightNowMedia']?.toString();
-        final salePrice    = p['salePrice'] ?? p['price'] ?? 0;
-        final regularPrice = p['regularPrice'] ?? p['price'] ?? 0;
+        final salePrice    = _cleanPrice(p['salePrice'] ?? p['price'] ?? 0);
+        final regularPrice = _cleanPrice(p['regularPrice'] ?? p['price'] ?? 0);
         final catSlug      = (p['category'] is Map ? p['category']['slug'] : p['categorySlug'])?.toString() ?? 'all';
         final slug         = (p['slug'] ?? p['_id'] ?? p['id'] ?? '').toString();
         return WcProduct(
           id: (p['_id'] ?? p['id'] ?? '').toString(),
           name: (p['name'] ?? p['title'] ?? '').toString(),
           priceHtml: '₹$salePrice',
-          image: ApiConstant.getImageUrl(img),
+          image: primary,
+          images: imageList,
           originalPrice: regularPrice != salePrice ? '₹$regularPrice' : null,
           hotMedia: hotMedia != null && hotMedia.isNotEmpty ? ApiConstant.getImageUrl(hotMedia) : null,
           categorySlug: catSlug,

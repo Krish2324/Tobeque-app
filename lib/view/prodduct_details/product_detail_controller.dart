@@ -116,30 +116,30 @@ class ProductDetailController extends GetxController {
     if (p == null) return const [];
     final list = <String>[];
 
+    final thumb = (p['thumbnail'] ?? p['thumbnailImage'] ?? p['featuredImage'] ?? p['image'])?.toString();
+    if (thumb != null && thumb.trim().isNotEmpty) {
+      final fullUrl = ApiConstant.getImageUrl(thumb.trim());
+      if (fullUrl != null && fullUrl.isNotEmpty && !list.contains(fullUrl)) {
+        list.add(fullUrl);
+      }
+    }
+
     final imgs = (p['images'] as List?) ?? const [];
     for (final item in imgs) {
       if (item is Map) {
         final url = (item['imageUrl'] ?? item['url'] ?? item['src'] ?? item['thumbnail'])?.toString();
         if (url != null && url.trim().isNotEmpty) {
           final fullUrl = ApiConstant.getImageUrl(url.trim());
-          if (!list.contains(fullUrl)) list.add(fullUrl);
+          if (fullUrl != null && fullUrl.isNotEmpty && !list.contains(fullUrl)) {
+            list.add(fullUrl);
+          }
         }
       } else if (item is String && item.trim().isNotEmpty) {
         final fullUrl = ApiConstant.getImageUrl(item.trim());
-        if (!list.contains(fullUrl)) list.add(fullUrl);
+        if (fullUrl != null && fullUrl.isNotEmpty && !list.contains(fullUrl)) {
+          list.add(fullUrl);
+        }
       }
-    }
-
-    final thumb = p['thumbnail']?.toString();
-    if (thumb != null && thumb.trim().isNotEmpty) {
-      final fullUrl = ApiConstant.getImageUrl(thumb.trim());
-      if (!list.contains(fullUrl)) list.add(fullUrl);
-    }
-
-    final feat = p['featuredImage']?.toString();
-    if (feat != null && feat.trim().isNotEmpty) {
-      final fullUrl = ApiConstant.getImageUrl(feat.trim());
-      if (!list.contains(fullUrl)) list.add(fullUrl);
     }
 
     return list;
@@ -151,18 +151,19 @@ class ProductDetailController extends GetxController {
 
     final priceNum = p['price'] ?? p['discountPrice'] ?? p['regularPrice'];
     if (priceNum != null && priceNum is num && priceNum > 0) {
-      return '₹${NumberFormat.decimalPattern().format(priceNum)}';
+      final formatted = '₹${NumberFormat.decimalPattern().format(priceNum)}';
+      return formatted.replaceFirst(RegExp(r'\.00$'), '').replaceAll('.00', '');
     }
 
     if (p['prices'] is Map) {
       final pr = priceText(p['prices'] as Map<String, dynamic>);
-      if (pr.isNotEmpty) return pr;
+      if (pr.isNotEmpty) return pr.replaceFirst(RegExp(r'\.00$'), '').replaceAll('.00', '');
     }
 
     final html = (p['price_html'] ?? p['priceHtml'])?.toString() ?? '';
     if (html.isNotEmpty) {
       final clean = html.replaceAll(RegExp(r'<[^>]*>'), '').replaceAll('&nbsp;', ' ').trim();
-      if (clean.isNotEmpty) return clean;
+      if (clean.isNotEmpty) return clean.replaceFirst(RegExp(r'\.00$'), '').replaceAll('.00', '');
     }
 
     return '₹0';
@@ -174,7 +175,8 @@ class ProductDetailController extends GetxController {
     final regPrice = p['regularPrice'];
     final curPrice = p['price'] ?? p['discountPrice'];
     if (regPrice is num && curPrice is num && regPrice > curPrice) {
-      return '₹${NumberFormat.decimalPattern().format(regPrice)}';
+      final formatted = '₹${NumberFormat.decimalPattern().format(regPrice)}';
+      return formatted.replaceFirst(RegExp(r'\.00$'), '').replaceAll('.00', '');
     }
     return '';
   }
@@ -207,11 +209,18 @@ class ProductDetailController extends GetxController {
   }
 
   String? pickImage(Map p) {
+    final thumb = (p['thumbnail'] ?? p['thumbnailImage'] ?? p['featuredImage'] ?? p['image'])?.toString();
+    if (thumb != null && thumb.trim().isNotEmpty) {
+      return ApiConstant.getImageUrl(thumb.trim());
+    }
     final imgs = (p['images'] as List?) ?? const [];
     if (imgs.isEmpty) return null;
-    final first = (imgs.first as Map);
-    final url = (first['imageUrl'] ?? first['url'] ?? first['src'] ?? first['thumbnail'])?.toString();
-    return ApiConstant.getImageUrl(url);
+    final first = imgs.first;
+    if (first is Map) {
+      final url = (first['imageUrl'] ?? first['url'] ?? first['src'] ?? first['thumbnail'])?.toString();
+      return ApiConstant.getImageUrl(url);
+    }
+    return ApiConstant.getImageUrl(first?.toString());
   }
 
   final styleItWithProducts = <Map<String, dynamic>>[].obs;

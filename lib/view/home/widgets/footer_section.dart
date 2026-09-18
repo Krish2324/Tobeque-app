@@ -2,7 +2,7 @@ import 'package:tobeque/componant/helper.dart';
 import 'package:tobeque/constants/api_constants.dart';
 import 'package:tobeque/constants/string_constant.dart';
 import 'package:tobeque/utills/helper_func.dart';
-import 'package:tobeque/view/legal/about_us_screen.dart';
+import 'package:tobeque/view/about/about_page.dart';
 import 'package:tobeque/view/legal/privacy_policy_screen.dart';
 import 'package:tobeque/view/legal/return_refund_policy.dart';
 import 'package:tobeque/view/legal/shipping_policy.dart';
@@ -73,25 +73,19 @@ class StoreFooterTobeque extends StatelessWidget {
             //   'Sustainability',
             //   'Careers',
             // ]),
-            expanded: // Inside your _FooterRow(expanded: ...) or wherever you use _InlineList
-_InlineList(
-  items: const ['About us',  'Careers','Sustainability' ],
-
-  onItemTap: (label, _) {
-    switch (label) {
-      case 'About us':
-       Get.to(() => const AboutUsTobequePage());
-
-        break;
-      case 'Careers':
-       launchWebUrl(Constent.carrerUrl);
-        break;
-      case 'Sustainability':
-        Get.to(() => const SustainabilityAtTobequePage());
-        break;
-    }
-  },
-),
+            expanded: _InlineList(
+              items: const ['About us', 'Careers'],
+              onItemTap: (label, _) {
+                switch (label) {
+                  case 'About us':
+                    Get.to(() => const AboutPage());
+                    break;
+                  case 'Careers':
+                    launchWebUrl(Constent.carrerUrl);
+                    break;
+                }
+              },
+            ),
 
           ),
           _FooterRow(
@@ -99,16 +93,8 @@ _InlineList(
             label: 'Contact',
             onTap: () => _showContactSheet(context, onCall: onCall, onChat: onChat),
           ),
-         _FooterRow(
-  icon: Icons.settings_outlined,
-  label: 'Settings',
-  onTap: () => openNativeAppSettings(context),
-  // trailingBuilder: const SizedBox.shrink(), // optional
-  // no `expanded:` here
-)
-,
-SizedBox(height: 25,),
-          const Divider(height: 1,thickness: 0.3,),
+          const SizedBox(height: 25),
+          const Divider(height: 1, thickness: 0.3),
 
           // -------------------- Legal links --------------------
           Padding(
@@ -538,6 +524,7 @@ class _LegalLink extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(4),
@@ -545,10 +532,11 @@ class _LegalLink extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 0, horizontal: 2),
         child: Text(
           text,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 13,
-           fontWeight: FontWeight.w300,
-            decorationColor: Colors.black54,
+            fontWeight: FontWeight.w400,
+            color: isDark ? Colors.white : Colors.black,
+            decorationColor: isDark ? Colors.white54 : Colors.black54,
           ),
         ),
       ),
@@ -560,7 +548,8 @@ class _Dot extends StatelessWidget {
   const _Dot();
   @override
   Widget build(BuildContext context) {
-    return const Text('·', style: TextStyle(color: Colors.black45));
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Text('·', style: TextStyle(color: isDark ? Colors.white60 : Colors.black45));
   }
 }
 /// One row in the sheet (Call / Start chat)

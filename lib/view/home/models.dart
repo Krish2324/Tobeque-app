@@ -71,17 +71,21 @@ class WcProduct {
         'slug': slug,
       };
 
-  factory WcProduct.fromJson(Map<String, dynamic> json) => WcProduct(
-        id: json['id'] ?? '',
-        name: json['name'] ?? '',
-        priceHtml: json['priceHtml'],
-        image: json['image'],
-        images: List<String>.from(json['images'] ?? []),
-        originalPrice: json['originalPrice'],
-        hotMedia: json['hotMedia'],
-        categorySlug: json['categorySlug'],
-        slug: json['slug'],
-      );
+  factory WcProduct.fromJson(Map<String, dynamic> json) {
+    final imgs = List<String>.from(json['images'] ?? []);
+    final primary = imgs.isNotEmpty ? imgs.first : json['image'];
+    return WcProduct(
+      id: json['id'] ?? '',
+      name: json['name'] ?? '',
+      priceHtml: json['priceHtml'],
+      image: primary,
+      images: imgs,
+      originalPrice: json['originalPrice'],
+      hotMedia: json['hotMedia'],
+      categorySlug: json['categorySlug'],
+      slug: json['slug'],
+    );
+  }
 
   String get displayName => HtmlDecode.text(name);
 

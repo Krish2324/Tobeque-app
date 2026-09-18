@@ -21,12 +21,43 @@ class OrdersController extends GetxController {
     loading(true);
     error.value = null;
     try {
+      String? userPhone;
+      try {
+        final profileRes = await _net.getApi(ApiConstant.userProfile);
+        if (profileRes is Map) {
+          final u = (profileRes['user'] as Map?) ?? profileRes;
+          userPhone = u['phone']?.toString();
+        }
+      } catch (_) {}
+
       final res = await _net.getApi(ApiConstant.userOrders);
       List list = [];
       if (res is Map && res['orders'] is List) {
         list = res['orders'];
       } else if (res is List) {
         list = res;
+      }
+
+      if (userPhone != null && userPhone.trim().isNotEmpty) {
+        final cleanPhone = userPhone.trim().replaceAll(RegExp(r'[^0-9]'), '');
+        try {
+          final phoneRes = await _net.getApi('${ApiConstant.userOrders}?phone=$cleanPhone&customerPhone=$cleanPhone');
+          List phoneList = [];
+          if (phoneRes is Map && phoneRes['orders'] is List) {
+            phoneList = phoneRes['orders'];
+          } else if (phoneRes is List) {
+            phoneList = phoneRes;
+          }
+
+          final existingIds = list.map((e) => (e['_id'] ?? e['id'] ?? e['orderNumber'] ?? '').toString()).toSet();
+          for (final item in phoneList) {
+            final itemId = (item['_id'] ?? item['id'] ?? item['orderNumber'] ?? '').toString();
+            if (itemId.isNotEmpty && !existingIds.contains(itemId)) {
+              list.add(item);
+              existingIds.add(itemId);
+            }
+          }
+        } catch (_) {}
       }
 
       final mapped = list.map((raw) {

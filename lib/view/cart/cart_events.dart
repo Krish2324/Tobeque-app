@@ -37,10 +37,10 @@ Future<void> addToCartAndNotify({
   CartEvents? events =
       Get.isRegistered<CartEvents>() ? Get.find<CartEvents>() : null;
   // If you implemented CartEvents.count/setCount as in my previous message:
-  final hadCountField = events != null && events.count != null;
+  final hadCountField = events != null;
   if (hadCountField) {
     // optimistic tick up; will be reconciled by bump() fetch
-    events!.setCount(events.count.value + quantity);
+    events.setCount(events.count.value + quantity);
   }
 
   try {
@@ -64,7 +64,7 @@ Future<void> addToCartAndNotify({
   } catch (e) {
     // Rollback optimistic badge if you enabled it
     if (hadCountField) {
-      events!.setCount((events.count.value - quantity).clamp(0, 1 << 31));
+      events.setCount((events.count.value - quantity).clamp(0, 1 << 31));
     }
     // Error feedback
     ScaffoldMessenger.of(context).showSnackBar(
