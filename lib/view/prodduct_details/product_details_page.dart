@@ -250,10 +250,10 @@ class ProductDetailPage extends StatelessWidget {
 
                         // Product Name
                         Text(
-                          HtmlDecode.text(name),
+                          HtmlDecode.text(name).toUpperCase(),
                           style: const TextStyle(
-                            fontSize: 19,
-                            fontWeight: FontWeight.w700,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
                             letterSpacing: -0.3,
                             height: 1.25,
                             color: Colors.black87,
@@ -269,17 +269,17 @@ class ProductDetailPage extends StatelessWidget {
                             Text(
                               price,
                               style: const TextStyle(
-                                fontSize: 22,
-                                fontWeight: FontWeight.w900,
-                                color: Colors.black,
+                                fontSize: 17,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.black87,
                               ),
                             ),
                             if (regularPrice.isNotEmpty) ...[
-                              const SizedBox(width: 10),
+                              const SizedBox(width: 8),
                               Text(
                                 regularPrice,
                                 style: const TextStyle(
-                                  fontSize: 14,
+                                  fontSize: 13,
                                   fontWeight: FontWeight.w500,
                                   color: Colors.black38,
                                   decoration: TextDecoration.lineThrough,
@@ -1577,10 +1577,10 @@ class _RelatedProductCard extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            HtmlDecode.text(name),
+            HtmlDecode.text(name).toUpperCase(),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.black87),
+            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.black87),
           ),
           const SizedBox(height: 2),
           Row(
@@ -1588,7 +1588,7 @@ class _RelatedProductCard extends StatelessWidget {
               if (priceStr.isNotEmpty)
                 Text(
                   priceStr,
-                  style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w900, color: Colors.black),
+                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.black87),
                 ),
               const Spacer(),
               Container(

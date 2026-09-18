@@ -54,6 +54,8 @@ final repo = HomeRepository();
 
  
 
+  bool _showAppBarFilter = false;
+
   @override
   void initState() {
     super.initState();
@@ -61,6 +63,19 @@ final repo = HomeRepository();
     _currentCatId = widget.categoryId;
     _currentTitle = widget.title;
     _load();
+    
+    _sc.addListener(() {
+      final shouldShow = _sc.hasClients && _sc.offset > 120;
+      if (shouldShow != _showAppBarFilter) {
+        setState(() => _showAppBarFilter = shouldShow);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _sc.dispose();
+    super.dispose();
   }
 
   Future<void> _load([String? catId]) async {
@@ -571,6 +586,42 @@ print(_all);
         ),
         title: Text(_currentTitle,
           style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+        actions: [
+          if (_showAppBarFilter)
+            Stack(
+              alignment: Alignment.center,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.tune_rounded),
+                  onPressed: _openFilterSheet,
+                  tooltip: 'Filter',
+                ),
+                if (activeFilters > 0)
+                  Positioned(
+                    right: 6,
+                    top: 6,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: const BoxDecoration(
+                        color: Colors.black,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Text(
+                        '$activeFilters',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                          height: 1,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          const SizedBox(width: 4),
+        ],
       ),
 // Subcategories / Category horizontal pill bar (web style)
 SliverToBoxAdapter(
@@ -713,13 +764,13 @@ SliverToBoxAdapter(
             )
           else
             SliverPadding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 0),
               sliver: SliverGrid(
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: grid == GridMode.two ? 2 : 3,
-                  mainAxisSpacing: 16,
-                  crossAxisSpacing: 12,
-                  childAspectRatio: grid == GridMode.two ? 0.53 : 0.46,
+                  mainAxisSpacing: 2,
+                  crossAxisSpacing: 2,
+                  childAspectRatio: grid == GridMode.two ? 0.58 : 0.46,
                 ),
                 delegate: SliverChildBuilderDelegate(
                   (context, i) {
@@ -782,36 +833,42 @@ SliverToBoxAdapter(
         final p1 = products[i++];
         final Map<String, dynamic>? item2 = (i < products.length) ? products[i++] : null;
         out.add(Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 0),
           child: Row(
             children: [
               Expanded(
-                child: SmallTile(
-                  p: p1,
-                  onTap: () {
-                    final id = (p1['_id'] ?? p1['id'] ?? '').toString();
-                    Get.to(() => ProductDetailPage(key: ValueKey(id), productId: id),
-                        binding: ProductDetailBinding(id));
-                  },
+                child: AspectRatio(
+                  aspectRatio: 0.58,
+                  child: SmallTile(
+                    p: p1,
+                    onTap: () {
+                      final id = (p1['_id'] ?? p1['id'] ?? '').toString();
+                      Get.to(() => ProductDetailPage(key: ValueKey(id), productId: id),
+                          binding: ProductDetailBinding(id));
+                    },
+                  ),
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 2),
               Expanded(
                 child: (item2 == null)
                     ? const SizedBox.shrink()
-                    : SmallTile(
-                        p: item2,
-                        onTap: () {
-                          final id = (item2['_id'] ?? item2['id'] ?? '').toString();
-                          Get.to(() => ProductDetailPage(key: ValueKey(id), productId: id),
-                              binding: ProductDetailBinding(id));
-                        },
+                    : AspectRatio(
+                        aspectRatio: 0.58,
+                        child: SmallTile(
+                          p: item2,
+                          onTap: () {
+                            final id = (item2['_id'] ?? item2['id'] ?? '').toString();
+                            Get.to(() => ProductDetailPage(key: ValueKey(id), productId: id),
+                                binding: ProductDetailBinding(id));
+                          },
+                        ),
                       ),
               ),
             ],
           ),
         ));
-        out.add(const SizedBox(height: 28));
+        out.add(const SizedBox(height: 16));
       }
     }
     return out;
@@ -1154,23 +1211,21 @@ class SmallTile extends StatelessWidget {
 
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(4),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Image area with overlayed heart (3:4 ratio)
-          AspectRatio(
-            aspectRatio: 3 / 4,
+          // Image area
+          Expanded(
             child: Stack(
               fit: StackFit.expand,
               children: [
                 SwipeGallery(
                   sources: sources,
                   fit: BoxFit.cover,
-                  borderRadius: 4,
+                  borderRadius: 0,
                 ),
                 Positioned(
-                  top: 8,
+                  bottom: 8,
                   right: 8,
                   child: WishButton(
                     id: (p['_id'] ?? p['id'] ?? '').toString(),
@@ -1184,61 +1239,76 @@ class SmallTile extends StatelessWidget {
               ],
             ),
           ),
-
-          const SizedBox(height: 8),
-
-          // Title & Price text
-          Text(
-            name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontWeight: FontWeight.w600,
-              height: 1.2,
-              letterSpacing: .2,
-              fontSize: 13,
-              color: Colors.black87,
-            ),
-          ),
-          const SizedBox(height: 3),
-          if (priceText.isNotEmpty)
-            Text(
-              priceText,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontWeight: FontWeight.w800,
-                height: 1.2,
-                letterSpacing: .2,
-                fontSize: 13,
-                color: Colors.black,
-              ),
-            ),
-          if (colorList.isNotEmpty) ...[
-            const SizedBox(height: 5),
-            Row(
+          
+          // Title, Price & Colors text
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                ...colorList.take(4).map((cName) => Container(
-                  margin: const EdgeInsets.only(right: 4),
-                  width: 10,
-                  height: 10,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: _parseColorSwatch(cName),
-                    border: Border.all(
-                      color: _parseColorSwatch(cName) == Colors.white ? Colors.black38 : Colors.black12,
-                      width: 1,
-                    ),
+                Text(
+                  name.toUpperCase(),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    height: 1.2,
+                    letterSpacing: 0.5,
+                    fontSize: 11,
+                    color: Colors.black87,
                   ),
-                )),
-                if (colorList.length > 4)
-                  Text(
-                    '+${colorList.length - 4}',
-                    style: const TextStyle(fontSize: 9, color: Colors.black54, fontWeight: FontWeight.w700),
-                  ),
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    if (priceText.isNotEmpty)
+                      Expanded(
+                        child: Text(
+                          priceText,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w500,
+                            height: 1.2,
+                            letterSpacing: .2,
+                            fontSize: 11,
+                            color: Colors.black54,
+                          ),
+                        ),
+                      ),
+                    if (colorList.isNotEmpty)
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ...colorList.take(4).map((cName) => Container(
+                            margin: const EdgeInsets.only(left: 4),
+                            width: 10,
+                            height: 10,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: _parseColorSwatch(cName),
+                              border: Border.all(
+                                color: _parseColorSwatch(cName) == Colors.white ? Colors.black38 : Colors.black12,
+                                width: 1,
+                              ),
+                            ),
+                          )),
+                          if (colorList.length > 4)
+                            Padding(
+                              padding: const EdgeInsets.only(left: 2),
+                              child: Text(
+                                '+${colorList.length - 4}',
+                                style: const TextStyle(fontSize: 9, color: Colors.black54, fontWeight: FontWeight.w700),
+                              ),
+                            ),
+                        ],
+                      ),
+                  ],
+                ),
               ],
             ),
-          ],
+          ),
         ],
       ),
     );

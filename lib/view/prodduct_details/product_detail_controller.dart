@@ -65,6 +65,13 @@ class ProductDetailController extends GetxController {
     api = ProductApi(NetworkApi());
     _load();
     super.onInit();
+
+    ever(colorSlug, (String? slug) {
+      if (pageCtrl.hasClients) {
+        pageCtrl.jumpToPage(0);
+        page.value = 0;
+      }
+    });
   }
 
   Future<void> _load() async {
@@ -114,13 +121,16 @@ class ProductDetailController extends GetxController {
   List<String> get extractedImages {
     final p = product.value;
     if (p == null) return const [];
-    final list = <String>[];
+    
+    final currentSlug = colorSlug.value;
+    final allUrls = <String>[];
+    final matchingUrls = <String>[];
 
     final thumb = (p['thumbnail'] ?? p['thumbnailImage'] ?? p['featuredImage'] ?? p['image'])?.toString();
     if (thumb != null && thumb.trim().isNotEmpty) {
       final fullUrl = ApiConstant.getImageUrl(thumb.trim());
-      if (fullUrl != null && fullUrl.isNotEmpty && !list.contains(fullUrl)) {
-        list.add(fullUrl);
+      if (fullUrl != null && fullUrl.isNotEmpty) {
+        allUrls.add(fullUrl);
       }
     }
 
@@ -130,19 +140,48 @@ class ProductDetailController extends GetxController {
         final url = (item['imageUrl'] ?? item['url'] ?? item['src'] ?? item['thumbnail'])?.toString();
         if (url != null && url.trim().isNotEmpty) {
           final fullUrl = ApiConstant.getImageUrl(url.trim());
-          if (fullUrl != null && fullUrl.isNotEmpty && !list.contains(fullUrl)) {
-            list.add(fullUrl);
+          if (fullUrl != null && fullUrl.isNotEmpty) {
+            if (!allUrls.contains(fullUrl)) allUrls.add(fullUrl);
+            
+            if (currentSlug != null) {
+              final c = item['color']?.toString().toLowerCase() ?? '';
+              final alt = item['alt']?.toString().toLowerCase() ?? '';
+              final n = item['name']?.toString().toLowerCase() ?? '';
+              if (c == currentSlug || alt == currentSlug || n == currentSlug) {
+                if (!matchingUrls.contains(fullUrl)) matchingUrls.add(fullUrl);
+              }
+            }
           }
         }
       } else if (item is String && item.trim().isNotEmpty) {
         final fullUrl = ApiConstant.getImageUrl(item.trim());
-        if (fullUrl != null && fullUrl.isNotEmpty && !list.contains(fullUrl)) {
-          list.add(fullUrl);
+        if (fullUrl != null && fullUrl.isNotEmpty && !allUrls.contains(fullUrl)) {
+          allUrls.add(fullUrl);
         }
       }
     }
 
-    return list;
+    final vars = (p['variants'] as List?) ?? (p['variations'] as List?) ?? const [];
+    for (final v in vars) {
+      if (v is Map) {
+        final url = (v['image'] ?? v['imageUrl'] ?? v['thumbnail'])?.toString();
+        if (url != null && url.trim().isNotEmpty) {
+           final fullUrl = ApiConstant.getImageUrl(url.trim());
+           if (fullUrl != null && fullUrl.isNotEmpty) {
+             if (!allUrls.contains(fullUrl)) allUrls.add(fullUrl);
+             
+             if (currentSlug != null) {
+               final vc = (v['color'] ?? v['attributes']?['color'] ?? v['attributes']?['pa_color'])?.toString().toLowerCase() ?? '';
+               if (vc == currentSlug) {
+                 if (!matchingUrls.contains(fullUrl)) matchingUrls.add(fullUrl);
+               }
+             }
+           }
+        }
+      }
+    }
+
+    return matchingUrls.isNotEmpty ? matchingUrls : allUrls;
   }
 
   String get formattedPrice {
