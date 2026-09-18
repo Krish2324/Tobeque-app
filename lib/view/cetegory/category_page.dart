@@ -46,6 +46,20 @@ final repo = HomeRepository();
   final Set<String> _selColors   = <String>{};
   final Set<String> _selSizes    = <String>{};
   bool _onlyDiscount = false;
+  double? _minPriceFilter;
+  double? _maxPriceFilter;
+
+  double _getProductPrice(Map<String, dynamic> p) {
+    final priceNum = p['price'] ?? p['discountPrice'] ?? p['regularPrice'];
+    if (priceNum != null && priceNum is num) return priceNum.toDouble();
+    if (priceNum != null && priceNum is String) return double.tryParse(priceNum) ?? 0.0;
+    
+    final prices = p['prices'];
+    if (prices is Map && prices['price'] != null) {
+      return double.tryParse(prices['price'].toString()) ?? 0.0;
+    }
+    return 0.0;
+  }
 
   // NEW ▼ subcategories (optional)
   List<Map<String, dynamic>> _subcats = const [];
@@ -98,47 +112,63 @@ void _collectFacets() {
   _facetColors.clear();
   _facetSizes.clear();
 
-  for (final p in _all) {
-    final attrs = (p['attributes'] as List?) ?? const [];
-    for (final a in attrs.whereType<Map>()) {
-      final key = ((a['taxonomy'] ?? a['name'])?.toString() ?? '').toLowerCase();
-      final values = _termSet(a['terms'] ?? a['options'] ?? a['options_json']);
+  const standardOrder = [
+    'black', 'white', 'grey', 'beige', 'brown', 'blue', 'navy', 'green', 'red', 'pink', 'yellow', 'purple', 'orange'
+  ];
 
-      if (key.contains('color') || key == 'pa_color') {
-        _facetColors.addAll(values);
-      }
-      if (key.contains('size') || key == 'pa_size') {
-        _facetSizes.addAll(values);
-      }
+  final Set<String> extractedColors = {};
+  for (final p in _all) {
+    final cList = _extractProductColors(p);
+    extractedColors.addAll(cList.map((e) => e.toLowerCase()));
+    
+    final sList = _extractProductSizes(p);
+    _facetSizes.addAll(sList.map((e) => e.toLowerCase()));
+  }
+
+  final Set<String> canonicalSet = {};
+
+  for (final sc in standardOrder) {
+    final canonicalName = _canonicalColorName(sc);
+    if (!canonicalSet.contains(canonicalName)) {
+      canonicalSet.add(canonicalName);
+      _facetColors.add(canonicalName);
+    }
+  }
+
+  for (final ec in extractedColors) {
+    final canonicalName = _canonicalColorName(ec);
+    if (!canonicalSet.contains(canonicalName)) {
+      canonicalSet.add(canonicalName);
+      _facetColors.add(canonicalName);
     }
   }
 }
 
-
 bool _productHasAnyColor(Map p, Set<String> want) {
   if (want.isEmpty) return true;
-  final attrs = (p['attributes'] as List?) ?? const [];
-  for (final a in attrs.whereType<Map>()) {
-    final key = ((a['taxonomy'] ?? a['name'])?.toString() ?? '').toLowerCase();
-    if (key.contains('color') || key == 'pa_color') {
-      final opts = _termSet(a['terms'] ?? a['options'] ?? a['options_json']);
-      if (opts.intersection(want.map((e) => e.toLowerCase()).toSet()).isNotEmpty) return true;
-    }
+  final cList = _extractProductColors(p as Map<String, dynamic>);
+  final pSet = cList.map((e) => e.toLowerCase()).toSet();
+  final pName = (p['name'] ?? p['title'] ?? '').toString().toLowerCase();
+
+  final wantCanonical = want.map((w) => _canonicalColorName(w)).toSet();
+
+  for (final c in pSet) {
+    if (wantCanonical.contains(_canonicalColorName(c))) return true;
   }
+
+  for (final w in want) {
+    final target = w.toLowerCase().trim();
+    if (pName.contains(target)) return true;
+  }
+
   return false;
 }
 
 bool _productHasAnySize(Map p, Set<String> want) {
   if (want.isEmpty) return true;
-  final attrs = (p['attributes'] as List?) ?? const [];
-  for (final a in attrs.whereType<Map>()) {
-    final key = ((a['taxonomy'] ?? a['name'])?.toString() ?? '').toLowerCase();
-    if (key.contains('size') || key == 'pa_size') {
-      final opts = _termSet(a['terms'] ?? a['options'] ?? a['options_json']);
-      if (opts.intersection(want.map((e) => e.toLowerCase()).toSet()).isNotEmpty) return true;
-    }
-  }
-  return false;
+  final sList = _extractProductSizes(p as Map<String, dynamic>);
+  final pSet = sList.map((e) => e.toLowerCase()).toSet();
+  return pSet.intersection(want.map((e) => e.toLowerCase()).toSet()).isNotEmpty;
 }
 
 
@@ -162,13 +192,19 @@ bool _productHasAnySize(Map p, Set<String> want) {
       if (!_productHasAnyColor(p, _selColors)) return false;
       if (!_productHasAnySize(p, _selSizes)) return false;
       if (_onlyDiscount && !_productDiscounted(p)) return false;
+      
+      final price = _getProductPrice(p);
+      if (_minPriceFilter != null && price < _minPriceFilter!) return false;
+      if (_maxPriceFilter != null && price > _maxPriceFilter!) return false;
+      
       return true;
     }).toList();
 
     // badge count
     activeFilters = (_selColors.isNotEmpty ? 1 : 0) +
                     (_selSizes.isNotEmpty ? 1 : 0) +
-                    (_onlyDiscount ? 1 : 0);
+                    (_onlyDiscount ? 1 : 0) +
+                    (_minPriceFilter != null || _maxPriceFilter != null ? 1 : 0);
 
     products = list;
     _applySort();
@@ -247,20 +283,7 @@ bool _productHasAnySize(Map p, Set<String> want) {
 
 
 
-  // ---------- UI helpers ----------
-  Color _colorFromName(String name) {
-    switch (name.toLowerCase()) {
-      case 'white': return const Color(0xfff5f5f5);
-      case 'black': return Colors.black;
-      case 'grey':  return Colors.grey;
-      case 'blue':  return Colors.blue;
-      case 'green': return Colors.green;
-      case 'brown': return const Color(0xff8B5A2B);
-      case 'red':   return Colors.red;
-      case 'yellow':return Colors.amber;
-      default:      return const Color(0xffd8d8d8);
-    }
-  }
+
 // --- helpers to read attribute values safely ---
 String _termLabel(dynamic o) {
   if (o is Map) return (o['name'] ?? o['value'] ?? o['slug'] ?? '').toString();
@@ -286,6 +309,25 @@ Set<String> _termSet(dynamic listLike) {
     final tempSizes  = Set<String>.from(_selSizes);
     bool tempDiscount = _onlyDiscount;
     SortMode tempSort = sort;
+    bool expandedColors = false;
+
+    double absoluteMin = 0.0;
+    double absoluteMax = 10000.0;
+    if (_all.isNotEmpty) {
+      final prices = _all.map((p) => _getProductPrice(p)).where((p) => p > 0).toList();
+      if (prices.isNotEmpty) {
+        absoluteMin = prices.reduce((a, b) => a < b ? a : b).floorToDouble();
+        absoluteMax = prices.reduce((a, b) => a > b ? a : b).ceilToDouble();
+      }
+    }
+    if (absoluteMax <= absoluteMin) {
+      absoluteMax = absoluteMin + 1000;
+    }
+
+    RangeValues tempRange = RangeValues(
+      (_minPriceFilter ?? absoluteMin).clamp(absoluteMin, absoluteMax),
+      (_maxPriceFilter ?? absoluteMax).clamp(absoluteMin, absoluteMax),
+    );
 
     await showModalBottomSheet(
       context: context,
@@ -300,12 +342,25 @@ Set<String> _termSet(dynamic listLike) {
             if (tempColors.isNotEmpty && !_productHasAnyColor(p, tempColors)) return false;
             if (tempSizes.isNotEmpty  && !_productHasAnySize(p, tempSizes))   return false;
             if (tempDiscount && !_productDiscounted(p)) return false;
+
+            final price = _getProductPrice(p);
+            if (price < tempRange.start) return false;
+            if (price > tempRange.end) return false;
+
             return true;
           }).length;
-print(_all);
+
           Widget groupTitle(String s) => Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 10),
-            child: Text(s, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+            padding: const EdgeInsets.fromLTRB(16, 24, 16, 16),
+            child: Text(
+              s.toUpperCase(), 
+              style: const TextStyle(
+                fontWeight: FontWeight.w700, 
+                fontSize: 12, 
+                letterSpacing: 1.2, 
+                color: Color(0xFF6B7280) // cool grey
+              ),
+            ),
           );
 
           return SafeArea(
@@ -330,6 +385,7 @@ print(_all);
                               tempSizes.clear();
                               tempDiscount = false;
                               tempSort = SortMode.popular;
+                              tempRange = RangeValues(absoluteMin, absoluteMax);
                             });
                           },
                           child: const Text('Clear'),
@@ -375,39 +431,67 @@ print(_all);
                         // Colour
                         if (_facetColors.isNotEmpty) ...[
                           const Divider(height: 24),
-                          groupTitle('Colour'),
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text(
+                                  'COLORS',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 12,
+                                    letterSpacing: 1.2,
+                                    color: Color(0xFF6B7280),
+                                  ),
+                                ),
+                                if (_facetColors.length > 7)
+                                  GestureDetector(
+                                    onTap: () => setM(() => expandedColors = !expandedColors),
+                                    child: Text(
+                                      expandedColors ? 'Show Less' : '+${_facetColors.length - 7} More',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 12,
+                                        color: Colors.black87,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 16),
                             child: Wrap(
-                              spacing: 14, runSpacing: 10,
-                              children: _facetColors.map((c) {
+                              spacing: 14, runSpacing: 12,
+                              children: (expandedColors ? _facetColors : _facetColors.take(7)).map((c) {
                                 final sel = tempColors.contains(c);
-                                return Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    GestureDetector(
-                                      onTap: () => setM(() {
-                                        if (sel) tempColors.remove(c); else tempColors.add(c);
-                                      }),
-                                      child: Container(
-                                        width: 35, height: 35,
-                                        decoration: BoxDecoration(
-                                          color: _colorFromName(c),
-                                          border: Border.all(
-                                            color: sel ? Colors.black : Colors.black26, width: sel ? 2 : 1),
-                                          borderRadius: BorderRadius.circular(0),
-                                        ),
+                                final colorVal = _colorFromName(c);
+                                final isWhiteOrLight = colorVal == const Color(0xFFFFFFFF) || colorVal == const Color(0xFFFAFAFA) || colorVal == const Color(0xFFF6F4E8);
+                                return GestureDetector(
+                                  onTap: () => setM(() {
+                                    if (sel) tempColors.remove(c); else tempColors.add(c);
+                                  }),
+                                  child: Container(
+                                    width: 36, height: 36,
+                                    decoration: BoxDecoration(
+                                      color: colorVal,
+                                      border: Border.all(
+                                        color: sel 
+                                            ? Colors.black 
+                                            : (isWhiteOrLight ? const Color(0xFFE5E7EB) : Colors.transparent), 
+                                        width: sel ? 2.5 : 1,
                                       ),
+                                      shape: BoxShape.circle,
                                     ),
-                                    const SizedBox(height: 6),
-                                    SizedBox(
-                                      width: 60,
-                                      child: Text(c[0].toUpperCase() + c.substring(1),
-                                        maxLines: 1, overflow: TextOverflow.ellipsis,
-                                        textAlign: TextAlign.center,
-                                      ),
-                                    ),
-                                  ],
+                                    child: sel ? Icon(
+                                      Icons.check,
+                                      size: 18,
+                                      color: (colorVal == const Color(0xFF000000) || colorVal == const Color(0xFF111111) || colorVal == const Color(0xFF1D3557) || colorVal == const Color(0xFF1E3A8A) || colorVal == const Color(0xFF78350F))
+                                          ? Colors.white
+                                          : Colors.black,
+                                    ) : null,
+                                  ),
                                 );
                               }).toList(),
                             ),
@@ -457,7 +541,80 @@ print(_all);
                             controlAffinity: ListTileControlAffinity.trailing,
                           ),
                         ),
-                        const SizedBox(height: 16),
+                        // Price Range
+                        const Divider(height: 24),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 24, 16, 4),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text(
+                                'PRICE RANGE',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 12,
+                                  letterSpacing: 1.2,
+                                  color: Color(0xFF6B7280),
+                                ),
+                              ),
+                              Text(
+                                '₹${tempRange.start.round()} - ₹${tempRange.end.round()}',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 14,
+                                  color: Colors.black,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          child: SliderTheme(
+                            data: SliderThemeData(
+                              activeTrackColor: Colors.black,
+                              inactiveTrackColor: const Color(0xFFE5E7EB),
+                              thumbColor: Colors.black,
+                              overlayColor: Colors.black.withValues(alpha: 0.12),
+                              trackHeight: 4,
+                              rangeThumbShape: const RoundRangeSliderThumbShape(enabledThumbRadius: 9),
+                            ),
+                            child: RangeSlider(
+                              values: tempRange,
+                              min: absoluteMin,
+                              max: absoluteMax,
+                              divisions: (absoluteMax - absoluteMin) > 0 
+                                  ? ((absoluteMax - absoluteMin) / 50).clamp(10, 200).toInt() 
+                                  : 100,
+                              labels: RangeLabels(
+                                '₹${tempRange.start.round()}',
+                                '₹${tempRange.end.round()}',
+                              ),
+                              onChanged: (RangeValues values) {
+                                setM(() {
+                                  tempRange = values;
+                                });
+                              },
+                            ),
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                '₹${absoluteMin.round()}',
+                                style: const TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.w600),
+                              ),
+                              Text(
+                                '₹${absoluteMax.round()}',
+                                style: const TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.w600),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 24),
                       ],
                     ),
                   ),
@@ -478,6 +635,8 @@ print(_all);
                             ..clear()
                             ..addAll(tempSizes);
                           _onlyDiscount = tempDiscount;
+                          _minPriceFilter = tempRange.start > absoluteMin ? tempRange.start : null;
+                          _maxPriceFilter = tempRange.end < absoluteMax ? tempRange.end : null;
                           Navigator.pop(ctx);
                           _applyFilters();
                         },
@@ -540,10 +699,10 @@ print(_all);
         });
         break;
       case SortMode.priceLowHigh:
-        list.sort((a, b) => priceMinor(a).compareTo(priceMinor(b)));
+        list.sort((a, b) => _getProductPrice(a).compareTo(_getProductPrice(b)));
         break;
       case SortMode.priceHighLow:
-        list.sort((a, b) => priceMinor(b).compareTo(priceMinor(a)));
+        list.sort((a, b) => _getProductPrice(b).compareTo(_getProductPrice(a)));
         break;
     }
 
@@ -1131,24 +1290,85 @@ class _BigTile extends StatelessWidget {
   }
 }
 
-Color _parseColorSwatch(String name) {
+String _canonicalColorName(String name) {
   final lower = name.toLowerCase().trim();
-  if (lower.contains('pink')) return const Color(0xFFFFB6C1);
-  if (lower.contains('black')) return Colors.black;
-  if (lower.contains('white')) return Colors.white;
-  if (lower.contains('red')) return const Color(0xFFE53935);
-  if (lower.contains('blue') || lower.contains('navy')) return const Color(0xFF1E88E5);
-  if (lower.contains('green') || lower.contains('olive')) return const Color(0xFF4CAF50);
-  if (lower.contains('yellow')) return const Color(0xFFFFEB3B);
-  if (lower.contains('brown')) return const Color(0xFF795548);
-  if (lower.contains('grey') || lower.contains('gray')) return Colors.grey;
-  if (lower.contains('beige') || lower.contains('cream')) return const Color(0xFFF5F5DC);
-  if (lower.contains('purple') || lower.contains('lavender')) return const Color(0xFF9C27B0);
-  if (lower.contains('orange')) return const Color(0xFFFF9800);
-  if (lower.contains('leopard') || lower.contains('print') || lower.contains('pattern')) return const Color(0xFFD2B48C);
-  if (lower.contains('stripe')) return const Color(0xFF607D8B);
-  return Colors.grey.shade400;
+  if (lower.isEmpty) return 'grey';
+
+  if (lower.contains('black') || lower.contains('charcoal')) return 'black';
+  if (lower.contains('white') || lower.contains('off white') || lower.contains('off-white') || lower.contains('cream') || lower.contains('ivory')) return 'white';
+  if (lower.contains('grey') || lower.contains('gray') || lower.contains('silver') || lower.contains('slate')) return 'grey';
+  if (lower.contains('beige') || lower.contains('nude') || lower.contains('sand')) return 'beige';
+  if (lower.contains('brown') || lower.contains('chocolate') || lower.contains('tan') || lower.contains('camel')) return 'brown';
+  if (lower.contains('navy') || lower.contains('dark blue')) return 'navy';
+  if (lower.contains('blue') || lower.contains('sky') || lower.contains('cyan') || lower.contains('denim')) return 'blue';
+  if (lower.contains('green') || lower.contains('emerald') || lower.contains('teal') || lower.contains('mint') || lower.contains('pista') || lower.contains('olive')) return 'green';
+  if (lower.contains('red') || lower.contains('maroon') || lower.contains('burgundy') || lower.contains('wine') || lower.contains('rust')) return 'red';
+  if (lower.contains('pink') || lower.contains('rose') || lower.contains('blush') || lower.contains('peach') || lower.contains('fuchsia')) return 'pink';
+  if (lower.contains('yellow') || lower.contains('mustard') || lower.contains('gold') || lower.contains('lemon')) return 'yellow';
+  if (lower.contains('orange') || lower.contains('coral')) return 'orange';
+  if (lower.contains('purple') || lower.contains('violet') || lower.contains('lavender') || lower.contains('plum')) return 'purple';
+  if (lower.contains('multi') || lower.contains('print') || lower.contains('pattern') || lower.contains('stripe')) return 'multi';
+
+  return lower;
 }
+
+Color _colorFromName(String name) {
+  final lower = name.toLowerCase().trim();
+  if (lower.isEmpty) return const Color(0xFFD1D5DB);
+
+  if (lower == 'black' || lower.contains('black') || lower.contains('charcoal')) {
+    return const Color(0xFF000000);
+  }
+  if (lower == 'white' || lower.contains('white') || lower.contains('off white') || lower.contains('off-white')) {
+    return const Color(0xFFFFFFFF);
+  }
+  if (lower == 'grey' || lower.contains('grey') || lower.contains('gray') || lower.contains('silver')) {
+    return const Color(0xFF9CA3AF);
+  }
+  if (lower == 'beige' || lower.contains('beige') || lower.contains('cream') || lower.contains('ivory') || lower.contains('nude')) {
+    return const Color(0xFFF6F4E8);
+  }
+  if (lower == 'brown' || lower.contains('brown') || lower.contains('chocolate') || lower.contains('tan') || lower.contains('camel')) {
+    return const Color(0xFF78350F);
+  }
+  if (lower == 'blue' || lower == 'sky blue' || lower.contains('light blue')) {
+    return const Color(0xFF3B82F6);
+  }
+  if (lower == 'navy' || lower.contains('navy') || lower.contains('dark blue')) {
+    return const Color(0xFF1D3557);
+  }
+  if (lower == 'green' || lower.contains('green') || lower.contains('emerald') || lower.contains('teal') || lower.contains('mint') || lower.contains('pista') || lower.contains('olive')) {
+    return const Color(0xFF10B981);
+  }
+  if (lower == 'red' || lower.contains('red') || lower.contains('maroon') || lower.contains('burgundy') || lower.contains('wine') || lower.contains('rust')) {
+    return const Color(0xFFEF4444);
+  }
+  if (lower == 'pink' || lower.contains('pink') || lower.contains('rose') || lower.contains('blush') || lower.contains('peach') || lower.contains('fuchsia')) {
+    return const Color(0xFFEC4899);
+  }
+  if (lower == 'yellow' || lower.contains('yellow') || lower.contains('mustard') || lower.contains('gold') || lower.contains('lemon')) {
+    return const Color(0xFFFBBF24);
+  }
+  if (lower.contains('orange') || lower.contains('coral')) {
+    return const Color(0xFFF97316);
+  }
+  if (lower.contains('purple') || lower.contains('violet') || lower.contains('lavender') || lower.contains('plum')) {
+    return const Color(0xFFA855F7);
+  }
+  if (lower.contains('multi') || lower.contains('print') || lower.contains('pattern') || lower.contains('stripe')) {
+    return const Color(0xFF6366F1);
+  }
+
+  final int hash = lower.hashCode.abs();
+  final double hue = (hash % 360).toDouble();
+  return HSLColor.fromAHSL(1.0, hue, 0.65, 0.55).toColor();
+}
+
+Color _parseColorSwatch(String name) {
+  return _colorFromName(name);
+}
+
+
 
 List<String> _extractProductColors(Map<String, dynamic> p) {
   final Set<String> colors = {};
@@ -1190,6 +1410,48 @@ List<String> _extractProductColors(Map<String, dynamic> p) {
     if (c != null && c.isNotEmpty) colors.add(c.trim());
   }
   return colors.where((c) => c.isNotEmpty).toList();
+}
+
+List<String> _extractProductSizes(Map<String, dynamic> p) {
+  final Set<String> sizes = {};
+  if (p['size'] is String && (p['size'] as String).trim().isNotEmpty) {
+    sizes.addAll((p['size'] as String).split(',').map((e) => e.trim()));
+  }
+  if (p['sizes'] is List) {
+    for (final c in (p['sizes'] as List)) {
+      if (c is String && c.trim().isNotEmpty) sizes.add(c.trim());
+      else if (c is Map) {
+        final val = (c['name'] ?? c['label'] ?? c['value'] ?? '').toString().trim();
+        if (val.isNotEmpty) sizes.add(val);
+      }
+    }
+  }
+  final attrs = (p['attributes'] as List?) ?? const [];
+  for (final a in attrs.whereType<Map>()) {
+    final key = ((a['taxonomy'] ?? a['name'])?.toString() ?? '').toLowerCase();
+    if (key.contains('size') || key == 'pa_size') {
+      final terms = a['terms'] ?? a['options'] ?? a['options_json'] ?? a['value'];
+      if (terms is List) {
+        for (final t in terms) {
+          if (t is Map) {
+            final val = (t['name'] ?? t['value'] ?? t['label'] ?? '').toString().trim();
+            if (val.isNotEmpty) sizes.add(val);
+          } else if (t != null) {
+            final val = t.toString().trim();
+            if (val.isNotEmpty) sizes.add(val);
+          }
+        }
+      } else if (terms is String && terms.trim().isNotEmpty) {
+        sizes.addAll(terms.split(',').map((e) => e.trim()));
+      }
+    }
+  }
+  final vars = (p['variants'] as List?) ?? (p['variations'] as List?) ?? const [];
+  for (final v in vars.whereType<Map>()) {
+    final s = (v['size'] ?? v['attributes']?['size'] ?? v['attributes']?['pa_size'])?.toString();
+    if (s != null && s.isNotEmpty) sizes.add(s.trim());
+  }
+  return sizes.where((c) => c.isNotEmpty).toList();
 }
 
 class SmallTile extends StatelessWidget {
