@@ -74,7 +74,64 @@ class _SignInScreenState extends State<SignInScreen> {
                   ),
                   const SizedBox(height: 28),
 
-                  // Error banner
+                  // Logged Out Notice Banner
+                  Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.only(bottom: 24),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF8E1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFFFE082)),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Color(0x0A000000),
+                          blurRadius: 8,
+                          offset: Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFFFB300),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.lock_outline, color: Colors.white, size: 20),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: const [
+                              Text(
+                                'You are currently logged out',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 15,
+                                  color: Color(0xFF5D4037),
+                                ),
+                              ),
+                              SizedBox(height: 4),
+                              Text(
+                                'Please enter your mobile number to log in again and access your account details, orders, and saved addresses.',
+                                style: TextStyle(
+                                  fontSize: 12.5,
+                                  color: Color(0xFF795548),
+                                  height: 1.35,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Error / Session Expiry Banner
                   Obx(() {
                     final err = c.error.value;
                     if (err == null || err.trim().isEmpty) return const SizedBox.shrink();

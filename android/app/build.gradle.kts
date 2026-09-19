@@ -3,6 +3,8 @@ plugins {
     id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+    // Firebase Google Services Plugin
+    id("com.google.gms.google-services")
 }
 
 import java.util.Properties
@@ -24,6 +26,8 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
+        // Required by flutter_local_notifications for Java 8+ APIs on Android < 26
+        isCoreLibraryDesugaringEnabled = true
     }
 
     kotlinOptions {
@@ -32,10 +36,11 @@ android {
 
     defaultConfig {
         applicationId = "com.app.tobeque"
-        minSdk = flutter.minSdkVersion
+        minSdk = flutter.minSdkVersion  // FCM requires minimum API 21
         targetSdk = flutter.targetSdkVersion
         versionCode = 3
         versionName = "1.0"
+        multiDexEnabled = true
     }
 
     // ------------ SIGNING CONFIG -----------------
@@ -70,4 +75,9 @@ android {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // Required for flutter_local_notifications core library desugaring
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }

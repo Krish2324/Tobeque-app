@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tobeque/constants/api_constants.dart';
+import 'package:tobeque/services/fcm_service.dart';
 
 class AuthRepository {
   final Dio _dio;
@@ -84,6 +85,11 @@ class AuthRepository {
     final data = Map<String, dynamic>.from(res.data);
     if (data['token'] != null) {
       await saveToken(data['token'].toString());
+      // Register FCM token with backend after successful login
+      // (runs in background, non-blocking)
+      FcmService.refreshTokenAfterLogin().catchError((e) {
+        // Non-fatal: notification won't work until next launch if this fails
+      });
     }
     return data;
   }

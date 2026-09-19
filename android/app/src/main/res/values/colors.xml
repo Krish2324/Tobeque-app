@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Tobeque brand color — used as FCM notification accent/icon tint -->
+    <color name="notification_color">#7C3AED</color>
+</resources>

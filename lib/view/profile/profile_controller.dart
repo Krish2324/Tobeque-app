@@ -7,6 +7,7 @@ import 'package:get/get.dart' hide FormData, MultipartFile;
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tobeque/services/shared_pref.dart';
+import 'package:tobeque/services/fcm_service.dart';
 
 /// Your site base
 const _kBaseUrl = 'https://tobeque.com';
@@ -147,6 +148,13 @@ class AuthController extends GetxController {
         await sp.setString('cached_user_profile', json.encode(u));
         if (_name.isNotEmpty) await sp.setString(_Keys.name, _name);
         if (_email.isNotEmpty) await sp.setString(_Keys.email, _email);
+      }
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 401 || e.response?.statusCode == 403) {
+        logout();
+        error.value = _prettyError(e) ?? 'Your session has expired due to inactivity. Please log in again.';
+      } else {
+        print('fetchUserProfile dio error: ${e.message}');
       }
     } catch (e) {
       print('fetchUserProfile error: $e');
@@ -297,6 +305,7 @@ class AuthController extends GetxController {
         await sp.setString(_Keys.name, _name);
         await sp.setString(_Keys.email, _email);
         loggedIn.value = true;
+        FcmService.refreshTokenAfterLogin();
         fetchUserProfile();
       } else {
         error.value = 'OTP verification failed. Please try again.';
@@ -650,6 +659,7 @@ class AuthController extends GetxController {
 
   /* -------------------------------- Logout -------------------------------- */
   Future<void> logout() async {
+    await FcmService.removeTokenOnLogout();
     _token = null;
     loggedIn.value = false;
     userProfileData.clear();
@@ -657,6 +667,8 @@ class AuthController extends GetxController {
     await sp.remove(_Keys.token);
     await sp.remove(_Keys.name);
     await sp.remove(_Keys.email);
+    await sp.remove('cached_user_profile');
+    await SharedPrefService.removeToken();
   }
 
   /* ------------------------------ Persistence ----------------------------- */
@@ -681,6 +693,7 @@ class AuthController extends GetxController {
     loggedIn.value = _token != null && _token!.isNotEmpty;
     if (loggedIn.value) {
       fetchUserProfile();
+      FcmService.refreshTokenAfterLogin();
     }
   }
   /* --------------------------------- Utils -------------------------------- */

@@ -6,25 +6,27 @@ import 'package:tobeque/view/profile/profile_controller.dart';
 import 'package:tobeque/view/root/bage_controller.dart';
 import 'package:tobeque/view/splash/splash_screen.dart';
 import 'package:dio/dio.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 
+import 'package:tobeque/services/fcm_service.dart';
 import 'package:tobeque/services/shared_pref.dart';
 import 'package:tobeque/theame/light_theme.dart';
 
 import 'package:tobeque/view/root/root_nav.dart';
 import 'package:tobeque/view/onboarding/intro_screen.dart';
-void main() async{
+
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // ---- register once for the whole app ----
+  // ── 1. Register GetX Singletons for whole app ────────────────────────────
   final dio = Dio(BaseOptions(
     connectTimeout: const Duration(seconds: 20),
     receiveTimeout: const Duration(seconds: 20),
     headers: {
       'Accept': 'application/json',
-      // add Origin/Referer if your server needs them
       'Origin': 'https://tobeque.com',
       'Referer': 'https://tobeque.com/',
     },
@@ -34,13 +36,23 @@ void main() async{
   final repo = AuthRepository(Get.find<Dio>());
   Get.put<AuthRepository>(repo, permanent: true);
 
-  // 👇 change baseUrl if needed
-  Get.put<AuthController>(AuthController(),
-      permanent: true);
+  Get.put<AuthController>(AuthController(), permanent: true);
 
+  final seen = await SharedPrefService.getBool('onboarding_done') ?? false;
 
-final seen = await SharedPrefService.getBool('onboarding_done') ?? false;
-runApp(MyApp(startOnboarding: seen));
+  // ── 2. Run App Immediately (prevents black screen before UI mounts) ──────
+  runApp(MyApp(startOnboarding: seen));
+
+  // ── 3. Initialize Firebase & FCM Asynchronously in Background ─────────────
+  Future.microtask(() async {
+    try {
+      await Firebase.initializeApp();
+      await FcmService.initialize();
+      debugPrint('[Firebase] ✅ Successfully initialized FCM Push Notifications');
+    } catch (e) {
+      debugPrint('[Firebase] Initialization notice: $e');
+    }
+  });
 }
 // void main() async {
 //   WidgetsFlutterBinding.ensureInitialized();
