@@ -90,7 +90,8 @@ flutter:
   assets:
     - assets/icon/icon.png
     - assets/splash.mp4
-    - assets/
+    - assets/girl.png
+    - assets/girl2.png
   
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

@@ -62,6 +62,7 @@ class WcProduct {
   });
 
   Map<String, dynamic> toJson() => {
+        if (rawMap != null) ...rawMap!,
         'id': id,
         'name': name,
         'priceHtml': priceHtml,
@@ -71,22 +72,32 @@ class WcProduct {
         'hotMedia': hotMedia,
         'categorySlug': categorySlug,
         'slug': slug,
-        if (rawMap != null) ...rawMap!,
       };
 
   factory WcProduct.fromJson(Map<String, dynamic> json) {
-    final imgs = List<String>.from(json['images'] ?? []);
-    final primary = imgs.isNotEmpty ? imgs.first : json['image'];
+    final rawImgs = json['images'] as List?;
+    final imgs = <String>[];
+    if (rawImgs != null) {
+      for (final item in rawImgs) {
+        if (item is String) {
+          imgs.add(item);
+        } else if (item is Map) {
+          final u = (item['imageUrl'] ?? item['url'] ?? item['src'] ?? item['thumbnail'])?.toString();
+          if (u != null && u.isNotEmpty) imgs.add(u);
+        }
+      }
+    }
+    final primary = imgs.isNotEmpty ? imgs.first : json['image']?.toString();
     return WcProduct(
       id: (json['id'] ?? json['_id'] ?? '').toString(),
       name: (json['name'] ?? json['title'] ?? '').toString(),
-      priceHtml: json['priceHtml'],
+      priceHtml: json['priceHtml']?.toString(),
       image: primary,
       images: imgs,
-      originalPrice: json['originalPrice'],
-      hotMedia: json['hotMedia'],
-      categorySlug: json['categorySlug'],
-      slug: json['slug'],
+      originalPrice: json['originalPrice']?.toString(),
+      hotMedia: json['hotMedia']?.toString(),
+      categorySlug: json['categorySlug']?.toString(),
+      slug: json['slug']?.toString(),
       rawMap: json,
     );
   }

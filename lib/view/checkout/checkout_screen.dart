@@ -983,7 +983,7 @@ class _OrderSummaryCard extends GetView<CheckoutController> {
                   value: (controller.isFreeShippingCoupon.value || controller.shippingCost.value <= 0) ? 'FREE' : controller.formatPrice(controller.shippingCost.value),
                   valueColor: const Color(0xFF2E7D32),
                 ),
-                if (isCod && cod > 0) ...[
+                if (isCod && cod > 0 && !controller.isFreeShippingCoupon.value) ...[
                   const SizedBox(height: 8),
                   _PriceBreakdownRow(
                     label: 'COD Handling Fee',

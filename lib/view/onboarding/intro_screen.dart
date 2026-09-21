@@ -85,19 +85,14 @@ void _showGoToSettings() {
   bool _checking = false;
   bool _showAllSet = false;
 
-  /// You asked to use two Freepik images (as local assets) and keep one Unsplash.
-  /// Put your Freepik images into assets and name them as below.
   ImageProvider _imageForIndex(int i) {
     if (i == 2) {
-      // Keep one Unsplash slide
       const id = 'photo-1503342217505-b0a15ec3261c';
-      final url = 'https://images.unsplash.com/$id?auto=format&fit=crop&w=1080&q=80';
+      final url = 'https://images.unsplash.com/$id?auto=format&fit=crop&w=800&q=70';
       return NetworkImage(url);
     } else if (i == 1) {
-      // Freepik: young woman with skateboard
       return const AssetImage('assets/girl.png');
     } else {
-      // Freepik: casual outdoor
       return const AssetImage('assets/girl2.png');
     }
   }
@@ -168,11 +163,10 @@ void _showGoToSettings() {
         Image(
           image: image,
           fit: BoxFit.cover,
-          loadingBuilder: (ctx, child, progress) {
-            if (progress == null) return child;
+          errorBuilder: (_, error, ___) {
+            debugPrint('Error loading intro slide image: $error');
             return Container(color: const Color(0xFF111111));
           },
-          errorBuilder: (_, __, ___) => Container(color: const Color(0xFF111111)),
         ),
 
         // Vignette overlay for readability

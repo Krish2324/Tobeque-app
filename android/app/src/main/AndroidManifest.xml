@@ -7,7 +7,9 @@
     <application
         android:label="Tobeque"
         android:name="${applicationName}"
-        android:icon="@mipmap/launcher_icon">
+        android:icon="@mipmap/launcher_icon"
+        android:usesCleartextTraffic="true"
+        android:largeHeap="true">
    
         <activity
             android:name=".MainActivity"

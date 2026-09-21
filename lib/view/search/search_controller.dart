@@ -95,6 +95,22 @@ class SearchController extends GetxController {
           }
           return copy;
         }).toList();
+
+        // Deduplicate product cards by clean base title so multiple variation records collapse to 1 card
+        final Set<String> seenKeys = {};
+        final List<Map<String, dynamic>> deduped = [];
+        for (final p in mapped) {
+          final rawName = (p['name'] ?? p['title'] ?? '').toString().trim().toLowerCase();
+          final cleanBase = rawName
+              .replaceAll(RegExp(r'\s*-\s*(blue|pink|white|grey|gray|red|black|yellow|green|navy|purple|orange)\b.*$', caseSensitive: false), '')
+              .trim();
+          final key = cleanBase.isNotEmpty ? cleanBase : (p['_id'] ?? p['id'] ?? '').toString();
+          if (!seenKeys.contains(key)) {
+            seenKeys.add(key);
+            deduped.add(p);
+          }
+        }
+        mapped = deduped;
       }
 
       if (append) {
@@ -130,7 +146,7 @@ class SearchController extends GetxController {
     return null;
   }
 
-  String? _resolveColorVariationImage(Map<String, dynamic> product, String color) {
+      String? _resolveColorVariationImage(Map<String, dynamic> product, String color) {
     final c = color.trim().toLowerCase();
     final regex = RegExp(r'\b' + RegExp.escape(c) + r'\b', caseSensitive: false);
 
@@ -171,19 +187,16 @@ class SearchController extends GetxController {
       }
     }
 
-    // 2. Check images array for images with color attribute or alt matching `color`
+    // 2. Check images array ONLY for explicit color field or alt tag matching `color` (not raw URL string)
     dynamic imgs = product['images'];
     if (imgs is List) {
       for (final item in imgs) {
         if (item is Map) {
-          final alt = (item['color'] ?? item['alt'] ?? item['name'] ?? item['title'] ?? '').toString();
+          final alt = (item['color'] ?? item['alt'] ?? item['name'])?.toString() ?? '';
           final src = (item['imageUrl'] ?? item['url'] ?? item['src'] ?? item['thumbnail'])?.toString();
-          if (regex.hasMatch(alt) || (src != null && regex.hasMatch(src))) {
+          if (alt.isNotEmpty && regex.hasMatch(alt)) {
             if (src != null && src.isNotEmpty) return src;
           }
-        } else if (item != null) {
-          final src = item.toString();
-          if (regex.hasMatch(src)) return src;
         }
       }
     }
@@ -202,9 +215,17 @@ class SearchController extends GetxController {
       return true;
     }
 
-    // 2. Check direct color fields / attributes / variations
+    // 2. Check direct color fields / attributes / variations / swatches
     final colorField = (product['color'] ?? product['colors'])?.toString() ?? '';
     if (regex.hasMatch(colorField)) return true;
+
+    final swatches = (product['colorSwatches'] as List?) ?? (product['swatches'] as List?) ?? const [];
+    for (final s in swatches) {
+      if (s is Map) {
+        final val = (s['color'] ?? s['name'] ?? s['label'] ?? s['title'])?.toString() ?? '';
+        if (regex.hasMatch(val)) return true;
+      }
+    }
 
     final attrs = product['attributes'];
     if (attrs is List) {
@@ -222,25 +243,13 @@ class SearchController extends GetxController {
     final vars = product['variations'] ?? product['variants'];
     if (vars is List) {
       for (final v in vars) {
-        final vStr = v.toString();
-        if (regex.hasMatch(vStr)) return true;
-      }
-    }
-
-    // 3. Check image URLs for color keyword
-    dynamic imgs = product['images'];
-    if (imgs is List) {
-      for (final item in imgs) {
-        final u = item is Map ? (item['imageUrl'] ?? item['url'] ?? item['src'])?.toString() : item?.toString();
-        if (u != null && regex.hasMatch(u)) {
+        if (v is Map) {
+          final vName = (v['name'] ?? v['color'] ?? v['title'] ?? v['attributes']?.toString() ?? '').toString();
+          if (regex.hasMatch(vName)) return true;
+        } else if (v != null && regex.hasMatch(v.toString())) {
           return true;
         }
       }
-    }
-
-    final thumb = (product['thumbnail'] ?? product['thumbnailImage'] ?? product['featuredImage'] ?? product['image'])?.toString();
-    if (thumb != null && regex.hasMatch(thumb)) {
-      return true;
     }
 
     return false;

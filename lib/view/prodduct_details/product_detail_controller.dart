@@ -26,6 +26,10 @@ class ProductDetailController extends GetxController {
 
   // gallery
   final page = 0.obs;
+  
+  /// The thumbnail URL known from the listing page. Shown as image[0] so the
+  /// user always sees the same image they tapped on the home/category page.
+  String? hintImageUrl;
 
   // picks
   final qty = 1.obs;
@@ -124,10 +128,21 @@ class ProductDetailController extends GetxController {
     final allUrls = <String>[];
     final matchingUrls = <String>[];
 
+    // 1. Always put the hint image (from the listing page) first so the user
+    //    sees the same image they tapped — even before other images load.
+    final hint = hintImageUrl?.trim();
+    if (hint != null && hint.isNotEmpty) {
+      final fullHint = ApiConstant.getImageUrl(hint);
+      if (fullHint.isNotEmpty) {
+        if (!allUrls.contains(fullHint)) allUrls.add(fullHint);
+        if (!matchingUrls.contains(fullHint)) matchingUrls.add(fullHint);
+      }
+    }
+
     final thumb = (p['thumbnail'] ?? p['thumbnailImage'] ?? p['featuredImage'] ?? p['image'])?.toString();
     if (thumb != null && thumb.trim().isNotEmpty) {
       final fullUrl = ApiConstant.getImageUrl(thumb.trim());
-      if (fullUrl.isNotEmpty) {
+      if (fullUrl.isNotEmpty && !allUrls.contains(fullUrl)) {
         allUrls.add(fullUrl);
       }
     }

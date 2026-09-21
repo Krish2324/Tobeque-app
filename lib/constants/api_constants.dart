@@ -46,8 +46,12 @@ class ApiConstant {
   // ── Image Helper ────────────────────────────────────────────────────────────
   static String getImageUrl(String? path) {
     if (path == null || path.isEmpty) return '';
-    if (path.startsWith('http://') || path.startsWith('https://')) return path;
-    if (path.startsWith('/')) return '$baseUrl$path';
-    return '$baseUrl/$path';
+    var url = path.trim();
+    if (url.startsWith('http://')) {
+      url = url.replaceFirst('http://', 'https://');
+    }
+    if (url.startsWith('https://')) return url;
+    if (url.startsWith('/')) return '$baseUrl$url';
+    return '$baseUrl/$url';
   }
 }

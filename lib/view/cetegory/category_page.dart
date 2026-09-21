@@ -937,20 +937,22 @@ SliverToBoxAdapter(
                     final p   = products[i];
                     final id  = (p['_id'] ?? p['id'] ?? '').toString();
 
+                    final sources = _imagesFromProduct(p);
+                    final hintImg = sources.isNotEmpty ? sources.first : null;
+
                     if (grid == GridMode.two) {
                       return SmallTile(
                         p: p,
                         onTap: () => Get.to(
-                          () => ProductDetailPage(key: ValueKey(id), productId: id),
+                          () => ProductDetailPage(key: ValueKey(id), productId: id, hintImageUrl: hintImg),
                           binding: ProductDetailBinding(id),
                         ),
                       );
                     }
 
-                    final sources = _imagesFromProduct(p);
                     return InkWell(
                       onTap: () => Get.to(
-                        () => ProductDetailPage(key: ValueKey(id), productId: id),
+                        () => ProductDetailPage(key: ValueKey(id), productId: id, hintImageUrl: hintImg),
                         binding: ProductDetailBinding(id),
                       ),
                       child: ClipRRect(
@@ -978,11 +980,13 @@ SliverToBoxAdapter(
     while (i < products.length) {
       // Big
       final p0 = products[i++];
+      final sources0 = _imagesFromProduct(p0);
+      final hintImg0 = sources0.isNotEmpty ? sources0.first : null;
       out.add(_BigTile(
         p: p0,
         onTap: () {
           final id = (p0['_id'] ?? p0['id'] ?? '').toString();
-          Get.to(() => ProductDetailPage(key: ValueKey(id), productId: id),
+          Get.to(() => ProductDetailPage(key: ValueKey(id), productId: id, hintImageUrl: hintImg0),
               binding: ProductDetailBinding(id));
         },
       ));
@@ -991,7 +995,11 @@ SliverToBoxAdapter(
       // Two-up row
       if (i < products.length) {
         final p1 = products[i++];
+        final sources1 = _imagesFromProduct(p1);
+        final hintImg1 = sources1.isNotEmpty ? sources1.first : null;
         final Map<String, dynamic>? item2 = (i < products.length) ? products[i++] : null;
+        final sources2 = item2 != null ? _imagesFromProduct(item2) : <String>[];
+        final hintImg2 = sources2.isNotEmpty ? sources2.first : null;
         out.add(Padding(
           padding: const EdgeInsets.symmetric(horizontal: 0),
           child: Row(
@@ -1003,7 +1011,7 @@ SliverToBoxAdapter(
                     p: p1,
                     onTap: () {
                       final id = (p1['_id'] ?? p1['id'] ?? '').toString();
-                      Get.to(() => ProductDetailPage(key: ValueKey(id), productId: id),
+                      Get.to(() => ProductDetailPage(key: ValueKey(id), productId: id, hintImageUrl: hintImg1),
                           binding: ProductDetailBinding(id));
                     },
                   ),
@@ -1019,7 +1027,7 @@ SliverToBoxAdapter(
                           p: item2,
                           onTap: () {
                             final id = (item2['_id'] ?? item2['id'] ?? '').toString();
-                            Get.to(() => ProductDetailPage(key: ValueKey(id), productId: id),
+                            Get.to(() => ProductDetailPage(key: ValueKey(id), productId: id, hintImageUrl: hintImg2),
                                 binding: ProductDetailBinding(id));
                           },
                         ),
@@ -1163,37 +1171,32 @@ List<String> _imagesFromProduct(Map<String, dynamic> p, {String? targetColor}) {
   final imgs = (p['images'] as List? ?? []);
   final urls = <String>[];
 
-  if (targetColor != null && targetColor.trim().isNotEmpty) {
-    final tc = targetColor.trim().toLowerCase();
-    final colorRegex = RegExp(r'\b' + RegExp.escape(tc) + r'\b', caseSensitive: false);
-
-    // 1. Check gallery images matching targetColor
-    for (final m in imgs) {
-      String? rawSrc;
-      if (m is Map) {
-        rawSrc = (m['imageUrl'] ?? m['url'] ?? m['src'] ?? m['thumbnail'])?.toString();
-      } else if (m != null) {
-        rawSrc = m.toString();
-      }
-      final u = _sanitizeUrl(rawSrc);
-      if (u != null && u.isNotEmpty && colorRegex.hasMatch(u) && !urls.contains(u)) {
-        urls.add(u);
-      }
-    }
-    // 2. Check thumbnail matching targetColor
-    final thumb = _sanitizeUrl((p['thumbnail'] ?? p['thumbnailImage'] ?? p['featuredImage'] ?? p['image'])?.toString());
-    if (thumb != null && thumb.isNotEmpty && colorRegex.hasMatch(thumb) && !urls.contains(thumb)) {
-      urls.add(thumb);
-    }
-  }
-
-  // 1. Extract from thumbnail / thumbnailImage / featuredImage first if available
+  // 1. Extract primary admin panel thumbnail first
   final thumb = _sanitizeUrl((p['thumbnail'] ?? p['thumbnailImage'] ?? p['featuredImage'] ?? p['image'])?.toString());
   if (thumb != null && thumb.isNotEmpty && !urls.contains(thumb)) {
     urls.add(thumb);
   }
 
-  // 2. Extract from images array
+  // 2. If targetColor specified, check explicit color tags (not raw URL string)
+  if (targetColor != null && targetColor.trim().isNotEmpty) {
+    final tc = targetColor.trim().toLowerCase();
+    final colorRegex = RegExp(r'\b' + RegExp.escape(tc) + r'\b', caseSensitive: false);
+
+    for (final m in imgs) {
+      if (m is Map) {
+        final colorTag = (m['color'] ?? m['alt'] ?? m['name'])?.toString() ?? '';
+        if (colorTag.isNotEmpty && colorRegex.hasMatch(colorTag)) {
+          final rawSrc = (m['imageUrl'] ?? m['url'] ?? m['src'] ?? m['thumbnail'])?.toString();
+          final u = _sanitizeUrl(rawSrc);
+          if (u != null && u.isNotEmpty && !urls.contains(u)) {
+            urls.add(u);
+          }
+        }
+      }
+    }
+  }
+
+  // 3. Extract from remaining images array
   for (final m in imgs) {
     String? rawSrc;
     if (m is Map) {
@@ -1235,10 +1238,9 @@ class _BigTile extends StatelessWidget {
             children: [
               InkWell(
                 onTap: onTap,
-                child: SwipeGallery(
+                child: _ResilientImage(
                   sources: sources,
                   fit: BoxFit.cover,
-                  borderRadius: 4,
                 ),
               ),
               Positioned(
@@ -1621,10 +1623,9 @@ class SmallTile extends StatelessWidget {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                SwipeGallery(
+                _ResilientImage(
                   sources: sources,
                   fit: BoxFit.cover,
-                  borderRadius: 0,
                 ),
                 Positioned(
                   bottom: 8,

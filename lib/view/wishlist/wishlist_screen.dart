@@ -196,7 +196,7 @@ Future<void> _moveToBasket(BuildContext context) async {
 
     return InkWell(
       onTap: () => Get.to(
-        () => ProductDetailPage(key: ValueKey(item.id), productId: item.id),
+        () => ProductDetailPage(key: ValueKey(item.id), productId: item.id, hintImageUrl: item.image),
         binding: ProductDetailBinding(item.id),
       ),
       child: Row(
@@ -334,7 +334,7 @@ class _SuggestTile extends GetView<CartController> {
         final pid = p['id'] as int?;
         if (pid == null) return;
         await Get.to(
-          () => ProductDetailPage(key: ValueKey(pid), productId: pid),
+          () => ProductDetailPage(key: ValueKey(pid), productId: pid, hintImageUrl: img.isNotEmpty ? img : null),
           binding: ProductDetailBinding(pid),
         );
       },

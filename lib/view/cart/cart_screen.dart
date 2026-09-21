@@ -174,7 +174,7 @@ if (items.isEmpty) {
                           if (id == null) return;
                           await Get.to(
                             () => ProductDetailPage(
-                                key: ValueKey(id), productId: id),
+                                key: ValueKey(id), productId: id, hintImageUrl: (img != null && img.isNotEmpty) ? img : null),
                             binding: ProductDetailBinding(id),
                           );
                         },
@@ -238,7 +238,8 @@ if (items.isEmpty) {
                                                         await Get.to(
                                                           () => ProductDetailPage(
                                                               key: ValueKey(id),
-                                                              productId: id),
+                                                              productId: id,
+                                                              hintImageUrl: (img != null && img.isNotEmpty) ? img : null),
                                                           binding:
                                                               ProductDetailBinding(
                                                                   id),
@@ -660,7 +661,7 @@ class SuggestStrip extends GetView<CartController> {
               final id = pid is int ? pid : await controller.resolveProductId(p);
               if (id == null) return;
               await Get.to(
-                () => ProductDetailPage(key: ValueKey(id), productId: id),
+                () => ProductDetailPage(key: ValueKey(id), productId: id, hintImageUrl: (img != null && img.isNotEmpty) ? img : null),
                 binding: ProductDetailBinding(id),
               );
             },

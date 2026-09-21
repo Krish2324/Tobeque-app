@@ -706,7 +706,14 @@ class _CategoryPosterCard extends StatelessWidget {
                 fit: StackFit.expand,
                 children: [
                   if (imageUrl != null && imageUrl!.isNotEmpty)
-                    Image.network(imageUrl!, fit: BoxFit.cover),
+                    CachedNetworkImage(
+                      imageUrl: imageUrl!,
+                      fit: BoxFit.cover,
+                      memCacheWidth: 600,
+                      maxWidthDiskCache: 600,
+                      placeholder: (_, __) => const _ShimmerBox(),
+                      errorWidget: (_, __, ___) => const ColoredBox(color: Color(0xFFF2F2F2)),
+                    ),
 
 
                     const DecoratedBox(
@@ -840,107 +847,32 @@ class _ProductCardState extends State<_ProductCard> {
       }
     }
 
-    Widget imageContent;
-    if (imgList.length > 1) {
-      imageContent = Stack(
-        fit: StackFit.expand,
-        children: [
-          PageView.builder(
-            controller: _pc,
-            onPageChanged: (idx) => setState(() => _imgIndex = idx),
-            itemCount: imgList.length,
-            itemBuilder: (_, i) => CachedNetworkImage(
-              imageUrl: imgList[i],
-              memCacheWidth: 400,
-              maxWidthDiskCache: 400,
-              fit: BoxFit.cover,
-              width: double.infinity,
-              height: double.infinity,
-              placeholder: (_, __) => const _ShimmerBox(),
-              errorWidget: (_, __, ___) => Container(
-                color: const Color(0xFFF0F0F0),
-                child: const Icon(Icons.image_not_supported_outlined,
-                    color: Colors.black26, size: 32),
-              ),
+    final Widget imageContent = Stack(
+      fit: StackFit.expand,
+      children: [
+        if (imgList.isNotEmpty)
+          CachedNetworkImage(
+            imageUrl: imgList.first,
+            memCacheWidth: 400,
+            maxWidthDiskCache: 400,
+            fit: BoxFit.cover,
+            width: double.infinity,
+            height: double.infinity,
+            placeholder: (_, __) => const _ShimmerBox(),
+            errorWidget: (_, __, ___) => Container(
+              color: const Color(0xFFF0F0F0),
+              child: const Icon(Icons.image_not_supported_outlined,
+                  color: Colors.black26, size: 32),
             ),
-          ),
-          Positioned(
-            bottom: 8,
-            left: 0,
-            right: 0,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: List.generate(imgList.length, (i) {
-                final isSel = i == _imgIndex;
-                return Container(
-                  width: isSel ? 14 : 4,
-                  height: 4,
-                  margin: const EdgeInsets.symmetric(horizontal: 2),
-                  decoration: BoxDecoration(
-                    color: isSel ? Colors.white : Colors.white70,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                );
-              }),
-            ),
-          ),
-        ],
-      );
-    } else {
-      imageContent = Stack(
-        fit: StackFit.expand,
-        children: [
-          if (imgList.isNotEmpty)
-            CachedNetworkImage(
-              imageUrl: imgList.first,
-              memCacheWidth: 400,
-              maxWidthDiskCache: 400,
-              fit: BoxFit.cover,
-              width: double.infinity,
-              height: double.infinity,
-              placeholder: (_, __) => const _ShimmerBox(),
-              errorWidget: (_, __, ___) => Container(
-                color: const Color(0xFFF0F0F0),
-                child: const Icon(Icons.image_not_supported_outlined,
-                    color: Colors.black26, size: 32),
-              ),
-            )
-          else
-            const _ShimmerBox(),
-          Positioned(
-            bottom: 8,
-            left: 0,
-            right: 0,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  width: 14,
-                  height: 3,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                const SizedBox(width: 3),
-                Container(
-                  width: 3,
-                  height: 3,
-                  decoration: const BoxDecoration(
-                    color: Colors.white70,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      );
-    }
+          )
+        else
+          const _ShimmerBox(),
+      ],
+    );
 
     return GestureDetector(
       onTap: () => Get.to(
-        () => ProductDetailPage(key: ValueKey(p.id), productId: p.id),
+        () => ProductDetailPage(key: ValueKey(p.id), productId: p.id, hintImageUrl: p.image),
         binding: ProductDetailBinding(p.id),
       ),
       child: Column(
@@ -1326,7 +1258,7 @@ class _OnSaleProductCard extends StatelessWidget {
 
     return GestureDetector(
       onTap: () => Get.to(
-        () => ProductDetailPage(key: ValueKey(p.id), productId: p.id),
+        () => ProductDetailPage(key: ValueKey(p.id), productId: p.id, hintImageUrl: img.isNotEmpty ? img : null),
         binding: ProductDetailBinding(p.id),
       ),
       child: Column(
@@ -1669,7 +1601,7 @@ class _HotRightNowCard extends StatelessWidget {
 
     return GestureDetector(
       onTap: () => Get.to(
-        () => ProductDetailPage(key: ValueKey(p.id), productId: p.id),
+        () => ProductDetailPage(key: ValueKey(p.id), productId: p.id, hintImageUrl: thumbUrl.isNotEmpty ? thumbUrl : null),
         binding: ProductDetailBinding(p.id),
       ),
       child: ClipRRect(

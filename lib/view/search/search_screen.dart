@@ -135,15 +135,17 @@ class SearchScreen extends GetView<SearchController> {
                         delegate: SliverChildBuilderDelegate(
                           (context, index) {
                             final p = items[index];
-                           
                             final id = (p['_id'] ?? p['id'] ?? '').toString();
+
+                            final hintImg = controller.pickImage(p);
 
                             return InkWell(
                                onTap: () {
                                 Get.to(
-            () => ProductDetailPage(key: ValueKey(id), productId: id),
-            binding: ProductDetailBinding(id),
-          );},
+                                  () => ProductDetailPage(key: ValueKey(id), productId: id, hintImageUrl: hintImg),
+                                  binding: ProductDetailBinding(id),
+                                );
+                              },
                               child: SmallTile(
                                 p: p,
                                 targetColor: controller.query.value,

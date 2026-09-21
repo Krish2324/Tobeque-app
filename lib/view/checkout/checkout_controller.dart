@@ -387,8 +387,9 @@ class CheckoutController extends GetxController {
     company.addListener(() {
       hasCompany.value = company.text.trim().isNotEmpty;
     });
-    // Recalculate totals whenever payment method changes (COD fee in/out)
+    // Recalculate totals whenever payment method or free shipping coupon changes
     ever(selectedPaymentId, (_) => _recalculateTotals());
+    ever(isFreeShippingCoupon, (_) => _recalculateTotals());
     _bootstrap();
   }
 
@@ -455,8 +456,10 @@ class CheckoutController extends GetxController {
         : Get.put(CartService(), permanent: true);
 
     final subtotalVal = cartService.totalPrice;
-    final appliedCodFee = (selectedPaymentId.value == 'cod') ? codFee.value : 0.0;
-    final appliedShipping = isFreeShippingCoupon.value ? 0.0 : shippingCost.value;
+    // When a free-shipping coupon is applied, waive BOTH the shipping cost AND the COD handling fee
+    final bool freeShip = isFreeShippingCoupon.value;
+    final appliedCodFee = (selectedPaymentId.value == 'cod' && !freeShip) ? codFee.value : 0.0;
+    final appliedShipping = freeShip ? 0.0 : shippingCost.value;
     final finalTotal = (subtotalVal + appliedShipping + appliedCodFee - discountAmount.value).clamp(0.0, double.infinity);
 
     totals.value = {
@@ -740,7 +743,7 @@ class CheckoutController extends GetxController {
           'paymentMethod':   'cod',
           'notes':           noteCtrl.text.trim(),
           'shippingCost':    isFreeShippingCoupon.value ? 0.0 : shippingCost.value,
-          'codFee':          codFee.value,
+          'codFee':          isFreeShippingCoupon.value ? 0.0 : codFee.value,
         };
 
         final res     = await api.postApi(body, ApiConstant.placeOrder);

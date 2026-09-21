@@ -19,12 +19,19 @@ import 'package:tobeque/constants/string_constant.dart';
 import 'package:tobeque/utills/helper_func.dart';
 
 class ProductDetailPage extends StatelessWidget {
-  const ProductDetailPage({super.key, required this.productId});
+  const ProductDetailPage({super.key, required this.productId, this.hintImageUrl});
   final dynamic productId;
+  /// Optional: the thumbnail URL already known from the listing page.
+  /// Ensures this image is shown first in the carousel before the full API response arrives.
+  final String? hintImageUrl;
 
   @override
   Widget build(BuildContext context) {
     final c = Get.find<ProductDetailController>(tag: 'p:$productId');
+    // Inject the hint image from the listing page so it shows first
+    if (hintImageUrl != null && hintImageUrl!.isNotEmpty) {
+      c.hintImageUrl = hintImageUrl;
+    }
 
     return Obx(() {
       if (c.loading.value) {
@@ -475,6 +482,8 @@ class ProductDetailPage extends StatelessWidget {
                                             CachedNetworkImage(
                                               imageUrl: imgUrl,
                                               fit: BoxFit.cover,
+                                              memCacheWidth: 80,
+                                              maxWidthDiskCache: 80,
                                               placeholder: (_, __) => ColoredBox(color: swatchColor),
                                               errorWidget: (_, __, ___) => ColoredBox(color: swatchColor),
                                             ),
