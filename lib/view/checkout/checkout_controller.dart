@@ -70,6 +70,7 @@ class CheckoutController extends GetxController {
   final couponLoading = false.obs;
   final couponError  = RxnString();
   final couponSuccess = RxnString();
+  final isFreeShippingCoupon = false.obs;
 
   final fetchingPincode = false.obs;
   final pincodeStatusMsg = RxnString();
@@ -455,7 +456,8 @@ class CheckoutController extends GetxController {
 
     final subtotalVal = cartService.totalPrice;
     final appliedCodFee = (selectedPaymentId.value == 'cod') ? codFee.value : 0.0;
-    final finalTotal = (subtotalVal + shippingCost.value + appliedCodFee - discountAmount.value).clamp(0.0, double.infinity);
+    final appliedShipping = isFreeShippingCoupon.value ? 0.0 : shippingCost.value;
+    final finalTotal = (subtotalVal + appliedShipping + appliedCodFee - discountAmount.value).clamp(0.0, double.infinity);
 
     totals.value = {
       'subtotal': subtotalVal,
@@ -580,6 +582,8 @@ class CheckoutController extends GetxController {
         if (computedDiscount > subtotalVal) computedDiscount = subtotalVal;
 
         discountAmount.value = computedDiscount;
+        final fs = couponData['freeShipping'];
+        isFreeShippingCoupon.value = (fs == true || fs == 'true' || fs == 1);
         appliedCoupons.assignAll([couponCodeStr]);
         _recalculateTotals();
 
@@ -603,6 +607,7 @@ class CheckoutController extends GetxController {
   Future<void> removeCoupon(String code) async {
     appliedCoupons.remove(code);
     discountAmount.value = 0.0;
+    isFreeShippingCoupon.value = false;
     couponSuccess.value = null;
     couponError.value  = null;
     _recalculateTotals();
@@ -734,7 +739,7 @@ class CheckoutController extends GetxController {
           'couponCode':      appliedCouponCode,
           'paymentMethod':   'cod',
           'notes':           noteCtrl.text.trim(),
-          'shippingCost':    shippingCost.value,
+          'shippingCost':    isFreeShippingCoupon.value ? 0.0 : shippingCost.value,
           'codFee':          codFee.value,
         };
 
@@ -760,7 +765,7 @@ class CheckoutController extends GetxController {
       final rzpPayload = {
         'items':        formattedItems,
         'couponCode':   appliedCouponCode,
-        'shippingCost': shippingCost.value,
+        'shippingCost': isFreeShippingCoupon.value ? 0.0 : shippingCost.value,
       };
 
       final rzpOrderRes = await api.postApi(rzpPayload, ApiConstant.razorpayCreateOrder) as Map;
@@ -773,7 +778,7 @@ class CheckoutController extends GetxController {
         'items':           formattedItems,
         'couponCode':      appliedCouponCode,
         'notes':           noteCtrl.text.trim(),
-        'shippingCost':    shippingCost.value,
+        'shippingCost':    isFreeShippingCoupon.value ? 0.0 : shippingCost.value,
       };
 
       // Check if zero amount order (e.g. 100% coupon discount)

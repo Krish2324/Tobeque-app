@@ -152,7 +152,7 @@ class AuthController extends GetxController {
     } on DioException catch (e) {
       if (e.response?.statusCode == 401 || e.response?.statusCode == 403) {
         logout();
-        error.value = _prettyError(e) ?? 'Your session has expired due to inactivity. Please log in again.';
+        error.value = null;
       } else {
         print('fetchUserProfile dio error: ${e.message}');
       }
@@ -662,6 +662,7 @@ class AuthController extends GetxController {
     await FcmService.removeTokenOnLogout();
     _token = null;
     loggedIn.value = false;
+    error.value = null;
     userProfileData.clear();
     final sp = await SharedPreferences.getInstance();
     await sp.remove(_Keys.token);
@@ -706,14 +707,14 @@ class AuthController extends GetxController {
 
     if (data is Map) {
       final msg  = data['message']?.toString();
-      if (msg != null && msg.isNotEmpty) return stripHtml(msg);
+      if (msg != null && msg.isNotEmpty && !msg.toLowerCase().contains('401')) return stripHtml(msg);
       final code = data['code']?.toString();
       if (code != null) return 'Error $code (${status ?? ''})'.trim();
-    } else if (data is String && data.isNotEmpty) {
+    } else if (data is String && data.isNotEmpty && !data.toLowerCase().contains('401')) {
       return stripHtml(data);
     }
-    if (status != null) return 'HTTP $status';
-    return e.message;
+    if (status != null && status != 401 && status != 403) return 'HTTP $status';
+    return null;
   }
 
   /// WooCommerce-focused error pretty-printer

@@ -134,7 +134,12 @@ class _SignInScreenState extends State<SignInScreen> {
                   // Error / Session Expiry Banner
                   Obx(() {
                     final err = c.error.value;
-                    if (err == null || err.trim().isEmpty) return const SizedBox.shrink();
+                    if (err == null ||
+                        err.trim().isEmpty ||
+                        err.contains('401') ||
+                        err.toUpperCase().contains('HTTP 401')) {
+                      return const SizedBox.shrink();
+                    }
                     return Container(
                       width: double.infinity,
                       margin: const EdgeInsets.only(bottom: 16),
