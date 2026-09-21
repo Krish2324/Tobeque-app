@@ -51,7 +51,8 @@ class FcmService {
     );
 
     // 3. Request permission from the user
-    await _requestPermissions();
+    // REMOVED: We now request this on the onboarding screen only!
+    // await _requestPermissions();
 
     // 4. Get and register the FCM token
     await _registerToken();

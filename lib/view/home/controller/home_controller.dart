@@ -5,6 +5,8 @@ import 'package:youtube_player_iframe/youtube_player_iframe.dart';
 
 import '../home_repository.dart';
 import '../models.dart';
+import 'package:permission_handler/permission_handler.dart';
+import '../../../services/shared_pref.dart';
 
 enum MediaKind { youtube, directFile, unknown }
 
@@ -40,6 +42,22 @@ class HomeController extends GetxController {
   void onInit() {
     super.onInit();
     _load();
+    _checkAndPromptNotificationPermission();
+  }
+
+  Future<void> _checkAndPromptNotificationPermission() async {
+    // Wait for the home screen to fully render before showing any popups
+    await Future.delayed(const Duration(seconds: 3));
+    final status = await Permission.notification.status;
+    
+    // Only prompt if they haven't been asked on the home screen yet
+    if (status.isDenied) {
+      final hasAsked = await SharedPrefService.getBool('has_asked_notification_home') ?? false;
+      if (!hasAsked) {
+        await SharedPrefService.setBool('has_asked_notification_home', true);
+        await Permission.notification.request();
+      }
+    }
   }
 
   @override

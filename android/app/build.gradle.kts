@@ -38,8 +38,8 @@ android {
         applicationId = "com.app.tobeque"
         minSdk = flutter.minSdkVersion  // FCM requires minimum API 21
         targetSdk = flutter.targetSdkVersion
-        versionCode = 3
-        versionName = "1.0"
+        versionCode = flutter.versionCode
+        versionName = flutter.versionName
         multiDexEnabled = true
     }
 

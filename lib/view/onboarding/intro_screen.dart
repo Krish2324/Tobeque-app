@@ -87,13 +87,11 @@ void _showGoToSettings() {
 
   ImageProvider _imageForIndex(int i) {
     if (i == 2) {
-      const id = 'photo-1503342217505-b0a15ec3261c';
-      final url = 'https://images.unsplash.com/$id?auto=format&fit=crop&w=800&q=70';
-      return NetworkImage(url);
+      return const AssetImage('assets/OnBoarding-4.jpg');
     } else if (i == 1) {
-      return const AssetImage('assets/girl.png');
+      return const AssetImage('assets/OnBoarding-2.jpg');
     } else {
-      return const AssetImage('assets/girl2.png');
+      return const AssetImage('assets/OnBoarding-1.jpg');
     }
   }
 
@@ -169,18 +167,18 @@ void _showGoToSettings() {
           },
         ),
 
-        // Vignette overlay for readability
+        // Vignette overlay for readability (reduced shading)
         Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: [
-                Colors.black.withOpacity(.80),
-                Colors.black.withOpacity(.15),
-                Colors.black.withOpacity(.85),
+                Colors.black.withOpacity(.10), // Very light at top
+                Colors.transparent,
+                Colors.black.withOpacity(.75), // Enough for white text readability
               ],
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              stops: const [0.0, 0.55, 1.0],
+              stops: const [0.0, 0.40, 1.0],
             ),
           ),
         ),
@@ -226,7 +224,7 @@ void _showGoToSettings() {
                     ],
                   ),
                 ),
-                const SizedBox(height: 180),
+                const SizedBox(height: 40),
 if (showCta)
   Column(
     children: [
@@ -281,7 +279,7 @@ if (showCta)
       ),
     ],
   ),
-
+                const SizedBox(height: 45), // Push content above the page indicator dots (reduced space)
               ],
             ),
           ),
@@ -294,19 +292,19 @@ if (showCta)
   Widget build(BuildContext context) {
     final slides = [
       _pageSlide(
-        image: _imageForIndex(0), // Freepik asset #1
-        title: "Discover New Trends",
-        subtitle: "Stay ahead with the latest arrivals curated just for you.",
+        image: _imageForIndex(0),
+        title: "Define Your Aesthetic",
+        subtitle: "Unlock exclusive styles you won't find anywhere else. Ready to stand out?",
       ),
       _pageSlide(
-        image: _imageForIndex(1), // Freepik asset #2
-        title: "Track Your Orders",
-        subtitle: "Get updates and manage your purchases seamlessly.",
+        image: _imageForIndex(1),
+        title: "Elevate Your Wardrobe",
+        subtitle: "Discover hand-picked collections that turn every day into a runway.",
       ),
       _pageSlide(
-        image: _imageForIndex(2), // Unsplash
-        title: "Stay Notified",
-        subtitle: "Turn on notifications for offers and order updates.",
+        image: _imageForIndex(2),
+        title: "Never Miss a Drop",
+        subtitle: "Enable notifications for secret drops, flash sales, and order updates.",
         showCta: true,
       ),
     ];
@@ -320,48 +318,43 @@ if (showCta)
             child: PageView.builder(
               controller: _page,
               itemCount: slides.length,
-              onPageChanged: (i)async {
+              onPageChanged: (i) {
                 setState(() => _index = i);
                 _precache(i);
-                 if (i == _slideCount - 1) {
-    final st = await Permission.notification.status;
-    if (st.isGranted) {
-      await _proceed(granted: true);
-    }
-  }
               },
               itemBuilder: (_, i) => slides[i],
             ),
           ),
 
           // --- sliding dots ---
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 90,
-            child: SafeArea(
-              top: false,
-              child: Center(
-                child: SmoothPageIndicator(
-                  controller: _page,
-                  count: _slideCount,
-                  effect: const ExpandingDotsEffect(
-                    activeDotColor: Colors.white,
-                    dotColor: Colors.white38,
-                    dotHeight: 8,
-                    dotWidth: 8,
-                    spacing: 8,
-                    expansionFactor: 3,
-                  ),
-                  onDotClicked: (i) => _page.animateToPage(
-                    i,
-                    duration: const Duration(milliseconds: 300),
-                    curve: Curves.easeOutCubic,
+          if (_index != _slideCount - 1)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 90,
+              child: SafeArea(
+                top: false,
+                child: Center(
+                  child: SmoothPageIndicator(
+                    controller: _page,
+                    count: _slideCount,
+                    effect: const ExpandingDotsEffect(
+                      activeDotColor: Colors.white,
+                      dotColor: Colors.white38,
+                      dotHeight: 8,
+                      dotWidth: 8,
+                      spacing: 8,
+                      expansionFactor: 3,
+                    ),
+                    onDotClicked: (i) => _page.animateToPage(
+                      i,
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeOutCubic,
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
 
           // “All set!” overlay (bottom-up)
           if (_showAllSet)
