@@ -450,7 +450,7 @@ class ProductDetailPage extends StatelessWidget {
                                     swatchColor == const Color(0xFFF6F4E8);
 
                                 return GestureDetector(
-                                  onTap: () { c.colorSlug.value = slug; c.colorLabel.value = label; },
+                                  onTap: () { c.colorManuallySelected.value = true; c.colorSlug.value = slug; c.colorLabel.value = label; },
                                   child: AnimatedContainer(
                                     duration: const Duration(milliseconds: 200),
                                     width: 36,

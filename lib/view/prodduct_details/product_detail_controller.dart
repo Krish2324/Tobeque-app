@@ -38,6 +38,10 @@ class ProductDetailController extends GetxController {
   final colorSlug = RxnString();
   final colorLabel = RxnString();
 
+  /// True only after the user has manually tapped a color swatch.
+  /// When false (initial auto-select), we still show the hint/thumbnail first.
+  final colorManuallySelected = false.obs;
+
   // cached options
   List<Map<String, String>> sizeOptions = [];
   List<Map<String, String>> colorOptions = [];
@@ -69,7 +73,9 @@ class ProductDetailController extends GetxController {
     super.onInit();
 
     ever(colorSlug, (String? slug) {
-      if (pageCtrl.hasClients) {
+      // Only jump the carousel when the user manually picks a color,
+      // not on the initial auto-selection from _load().
+      if (colorManuallySelected.value && pageCtrl.hasClients) {
         pageCtrl.jumpToPage(0);
         page.value = 0;
       }
@@ -128,14 +134,18 @@ class ProductDetailController extends GetxController {
     final allUrls = <String>[];
     final matchingUrls = <String>[];
 
-    // 1. Always put the hint image (from the listing page) first so the user
-    //    sees the same image they tapped — even before other images load.
+    // 1. Always put the hint image (from the listing page) first.
+    //    Also add it to matchingUrls when the color was NOT manually selected
+    //    so the thumbnail is visible on initial page open.
     final hint = hintImageUrl?.trim();
     if (hint != null && hint.isNotEmpty) {
       final fullHint = ApiConstant.getImageUrl(hint);
       if (fullHint.isNotEmpty) {
         if (!allUrls.contains(fullHint)) allUrls.add(fullHint);
-        if (!matchingUrls.contains(fullHint)) matchingUrls.add(fullHint);
+        // Show hint as first image until user manually picks a color
+        if (!colorManuallySelected.value) {
+          if (!matchingUrls.contains(fullHint)) matchingUrls.add(fullHint);
+        }
       }
     }
 
