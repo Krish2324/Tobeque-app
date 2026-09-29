@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'product_detail_controller.dart';
 import 'package:tobeque/view/cart/cart_screen.dart';
+import 'product_details_page.dart';
 
 Future<void> openSizeSheet(BuildContext context, ProductDetailController c) async {
   await showModalBottomSheet(
@@ -134,7 +135,7 @@ class _SizeSheet extends StatelessWidget {
                 const Text('Select size', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
                 const Spacer(),
                 TextButton.icon(
-                  onPressed: () {/* TODO: size guide */},
+                  onPressed: () => showSizeGuideModal(context, c.product.value),
                   icon: const Icon(Icons.straighten, size: 18),
                   label: const Text('Size guide'),
                 ),

@@ -344,7 +344,7 @@ class ProductDetailPage extends StatelessWidget {
                                 ],
                               ),
                               InkWell(
-                                onTap: () => _showSizeGuideModal(context),
+                                onTap: () => showSizeGuideModal(context, c.product.value),
                                 borderRadius: BorderRadius.circular(4),
                                 child: const Padding(
                                   padding: EdgeInsets.symmetric(vertical: 2, horizontal: 4),
@@ -1249,16 +1249,48 @@ class ProductDetailPage extends StatelessWidget {
     );
   }
 
-  void _showSizeGuideModal(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+}
+
+void showSizeGuideModal(BuildContext context, Map<String, dynamic>? product) {
+  final chart = product?['sizeChart'];
+  List<String> headers = ['Size', 'Bust', 'Waist', 'Hips'];
+  List<Map<String, dynamic>> rows = [
+    {'Size': 'XS', 'Bust': '32"', 'Waist': '26"', 'Hips': '35"'},
+    {'Size': 'S', 'Bust': '34"', 'Waist': '28"', 'Hips': '37"'},
+    {'Size': 'M', 'Bust': '36"', 'Waist': '30"', 'Hips': '39"'},
+    {'Size': 'L', 'Bust': '38"', 'Waist': '32"', 'Hips': '41"'},
+    {'Size': 'XL', 'Bust': '40"', 'Waist': '34"', 'Hips': '43"'},
+  ];
+
+  if (chart != null) {
+    if (chart['headers'] is List && (chart['headers'] as List).isNotEmpty) {
+      headers = List<String>.from(chart['headers']);
+    }
+    if (chart['rows'] is List && (chart['rows'] as List).isNotEmpty) {
+      rows = List<Map<String, dynamic>>.from(chart['rows'].map((e) => Map<String, dynamic>.from(e as Map)));
+    }
+  }
+
+  final String rawGuideImage = chart != null && chart['image'] != null ? chart['image'].toString() : '';
+  final String guideImage = rawGuideImage.isNotEmpty && !rawGuideImage.startsWith('http') 
+      ? ApiConstant.getImageUrl(rawGuideImage) 
+      : rawGuideImage;
+
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.white,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+    ),
+    builder: (ctx) => Padding(
+      padding: EdgeInsets.only(
+        top: 20.0,
+        left: 20.0,
+        right: 20.0,
+        bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
       ),
-      builder: (_) => Padding(
-        padding: const EdgeInsets.all(20.0),
+      child: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1266,61 +1298,54 @@ class ProductDetailPage extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Size Guide (Inches)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                const Text('Size Guide', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
                 IconButton(icon: const Icon(Icons.close, size: 20), onPressed: () => Navigator.pop(context)),
               ],
             ),
             const SizedBox(height: 12),
             Table(
               border: TableBorder.all(color: const Color(0xFFEEEEEE)),
-              children: const [
+              children: [
                 TableRow(
-                  decoration: BoxDecoration(color: Color(0xFFF5F5F5)),
-                  children: [
-                    Padding(padding: EdgeInsets.all(8.0), child: Text('Size', style: TextStyle(fontWeight: FontWeight.bold))),
-                    Padding(padding: EdgeInsets.all(8.0), child: Text('Bust', style: TextStyle(fontWeight: FontWeight.bold))),
-                    Padding(padding: EdgeInsets.all(8.0), child: Text('Waist', style: TextStyle(fontWeight: FontWeight.bold))),
-                    Padding(padding: EdgeInsets.all(8.0), child: Text('Hips', style: TextStyle(fontWeight: FontWeight.bold))),
-                  ],
+                  decoration: const BoxDecoration(color: Color(0xFFF5F5F5)),
+                  children: headers.map((h) => Padding(
+                    padding: const EdgeInsets.all(8.0), 
+                    child: Text(h, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                  )).toList(),
                 ),
-                TableRow(children: [
-                  Padding(padding: EdgeInsets.all(8.0), child: Text('XS')),
-                  Padding(padding: EdgeInsets.all(8.0), child: Text('32"')),
-                  Padding(padding: EdgeInsets.all(8.0), child: Text('26"')),
-                  Padding(padding: EdgeInsets.all(8.0), child: Text('35"')),
-                ]),
-                TableRow(children: [
-                  Padding(padding: EdgeInsets.all(8.0), child: Text('S')),
-                  Padding(padding: EdgeInsets.all(8.0), child: Text('34"')),
-                  Padding(padding: EdgeInsets.all(8.0), child: Text('28"')),
-                  Padding(padding: EdgeInsets.all(8.0), child: Text('37"')),
-                ]),
-                TableRow(children: [
-                  Padding(padding: EdgeInsets.all(8.0), child: Text('M')),
-                  Padding(padding: EdgeInsets.all(8.0), child: Text('36"')),
-                  Padding(padding: EdgeInsets.all(8.0), child: Text('30"')),
-                  Padding(padding: EdgeInsets.all(8.0), child: Text('39"')),
-                ]),
-                TableRow(children: [
-                  Padding(padding: EdgeInsets.all(8.0), child: Text('L')),
-                  Padding(padding: EdgeInsets.all(8.0), child: Text('38"')),
-                  Padding(padding: EdgeInsets.all(8.0), child: Text('32"')),
-                  Padding(padding: EdgeInsets.all(8.0), child: Text('41"')),
-                ]),
-                TableRow(children: [
-                  Padding(padding: EdgeInsets.all(8.0), child: Text('XL')),
-                  Padding(padding: EdgeInsets.all(8.0), child: Text('40"')),
-                  Padding(padding: EdgeInsets.all(8.0), child: Text('34"')),
-                  Padding(padding: EdgeInsets.all(8.0), child: Text('43"')),
-                ]),
+                ...rows.map((row) => TableRow(
+                  children: headers.map((h) {
+                    final val = row[h]?.toString() ?? '';
+                    return Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: Text(val, style: const TextStyle(fontSize: 13)),
+                    );
+                  }).toList(),
+                )),
               ],
             ),
+            if (guideImage.isNotEmpty) ...[
+              const SizedBox(height: 20),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: CachedNetworkImage(
+                  imageUrl: guideImage,
+                  width: double.infinity,
+                  fit: BoxFit.contain,
+                  placeholder: (context, url) => const SizedBox(
+                    height: 150,
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
+                  errorWidget: (context, url, error) => const SizedBox.shrink(),
+                ),
+              ),
+            ],
             const SizedBox(height: 20),
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
 }
 
 /// ─────────────────────────────────────────────────────────────────────────────
