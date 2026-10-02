@@ -63,9 +63,14 @@ android {
             } else {
                 signingConfig = signingConfigs.getByName("debug")
             }
-            
-            isMinifyEnabled = false
-            isShrinkResources = false
+
+            // ── R8 / Code shrinking (fixes Play Console DEX optimization warning) ──
+            isMinifyEnabled = true        // enables R8 code shrinking + obfuscation
+            isShrinkResources = true      // removes unused resources → smaller AAB
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
         debug {
             signingConfig = signingConfigs.getByName("debug")
