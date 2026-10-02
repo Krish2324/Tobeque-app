@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui';
 import 'dart:math' as math;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:shimmer/shimmer.dart';
@@ -17,6 +18,7 @@ import 'package:youtube_player_iframe/youtube_player_iframe.dart';
 import 'package:tobeque/componant/helper.dart';
 
 import '../cetegory/category_page.dart';
+import '../menu/menu_screen.dart';
 import '../prodduct_details/product_detail_binding.dart';
 import '../prodduct_details/product_details_page.dart';
 import 'controller/home_controller.dart';
@@ -91,6 +93,49 @@ class HomePageView extends StatelessWidget {
               surfaceTintColor: Colors.transparent,
               scrolledUnderElevation: 0,
               foregroundColor: Colors.black,
+              leadingWidth: 70,
+              leading: Padding(
+                padding: const EdgeInsets.only(left: 14, top: 6, bottom: 6),
+                child: Center(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(30),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                      child: Container(
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.35),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.25),
+                            width: 1,
+                          ),
+                        ),
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            customBorder: const CircleBorder(),
+                            splashColor: Colors.white24,
+                            onTap: () {
+                              Get.to(
+                                () => const MenuScreen(),
+                                transition: Transition.leftToRight,
+                                duration: const Duration(milliseconds: 280),
+                              );
+                            },
+                            child: const Icon(
+                              Icons.menu_rounded,
+                              color: Colors.white,
+                              size: 22,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
               flexibleSpace: FlexibleSpaceBar(
                 centerTitle: true,
                 expandedTitleScale: 2.2,

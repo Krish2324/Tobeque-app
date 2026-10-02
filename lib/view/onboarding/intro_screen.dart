@@ -234,8 +234,9 @@ if (showCta)
             child: OutlinedButton(
               onPressed: () => _proceed(granted: false),
               style: OutlinedButton.styleFrom(
+                backgroundColor: Colors.transparent,
                 foregroundColor: Colors.white,
-                side: const BorderSide(color: Colors.white70),
+                side: const BorderSide(color: Colors.white70, width: 1.5),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 padding: const EdgeInsets.symmetric(vertical: 14),
               ),

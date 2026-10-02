@@ -1628,7 +1628,7 @@ class SmallTile extends StatelessWidget {
                   fit: BoxFit.cover,
                 ),
                 Positioned(
-                  bottom: 8,
+                  top: 8,
                   right: 8,
                   child: WishButton(
                     id: (p['_id'] ?? p['id'] ?? '').toString(),

@@ -157,8 +157,23 @@ class _MenuScreenState extends State<MenuScreen> {
                         onTap: () => launchEmail(Constent.email),
                         filled: true,
                       ),
-                      const SizedBox(width: 8),
-                      _PillChip(label: 'Limited Drops', filled: false),
+                      const Spacer(),
+                      if (Navigator.canPop(context))
+                        GestureDetector(
+                          onTap: () => Get.back(),
+                          child: Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFF6F6F5),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.close_rounded,
+                              color: Colors.black,
+                              size: 20,
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                   const SizedBox(height: 20),
