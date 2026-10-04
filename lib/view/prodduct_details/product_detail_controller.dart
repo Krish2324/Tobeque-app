@@ -7,6 +7,8 @@ import 'package:tobeque/data/network/network_api_sarvices.dart';
 import 'package:tobeque/view/prodduct_details/product_api_repo.dart';
 import 'package:tobeque/view/cart/cart_service.dart';
 import 'package:tobeque/view/checkout/checkout_screen.dart';
+import 'package:tobeque/view/profile/sign_in_up.dart';
+import 'package:tobeque/view/profile/profile_controller.dart';
 import 'package:tobeque/constants/api_constants.dart';
  // for CartBadgeController.refreshNow()
 
@@ -637,7 +639,7 @@ class ProductDetailController extends GetxController {
     );
   }
 
-  /// Direct Buy Now: validates, adds to cart, and navigates directly to Checkout
+  /// Direct Buy Now: validates, adds to cart, checks login, and navigates to Checkout
   Future<void> buyNow(BuildContext context) async {
     final attrs = _currentAttributes();
     final p = product.value;
@@ -660,7 +662,19 @@ class ProductDetailController extends GetxController {
       attributes: attrs,
     );
 
-    if (success && context.mounted) {
+    if (!success || !context.mounted) return;
+
+    // ── Auth guard: ensure user is logged in before checkout ──
+    final auth = Get.find<AuthController>();
+    if (!auth.loggedIn.value) {
+      // Navigate to login; after successful login the ever() listener
+      // in SignInScreen calls Get.back(), returning here.
+      await Get.to(() => const SignInScreen());
+      // Re-check after user returns from login screen
+      if (!auth.loggedIn.value) return; // still not logged in → abort
+    }
+
+    if (context.mounted) {
       Get.to(() => const CheckoutScreen());
     }
   }

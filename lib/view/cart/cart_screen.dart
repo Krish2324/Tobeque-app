@@ -13,6 +13,21 @@ import 'package:tobeque/view/cart/cart_controller.dart';
 import 'package:tobeque/view/cart/cart_binding.dart';
 import 'package:tobeque/view/cetegory/category_page.dart';
 import 'package:tobeque/view/prodduct_details/product_details_page.dart';
+import 'package:tobeque/view/profile/profile_controller.dart';
+import 'package:tobeque/view/profile/sign_in_up.dart';
+
+
+/// Auth-guarded checkout navigation.
+/// If user is logged in → go to CheckoutScreen directly.
+/// Otherwise → open SignInScreen first, then proceed after login.
+Future<void> _goToCheckoutWithAuthCheck() async {
+  final auth = Get.find<AuthController>();
+  if (!auth.loggedIn.value) {
+    await Get.to(() => const SignInScreen());
+    if (!auth.loggedIn.value) return; // user dismissed without logging in
+  }
+  Get.to(() => const CheckoutScreen());
+}
 
 class CartScreen extends GetView<CartController> {
   const CartScreen({super.key});
@@ -408,7 +423,7 @@ if (items.isEmpty) {
           total: controller.formatPrice(controller.cartTotal()),
           onProcess: controller.mutating.value
               ? null
-              : () => Get.to(const CheckoutScreen()),
+              : () => _goToCheckoutWithAuthCheck(),
         ),
       );
     });
@@ -590,7 +605,7 @@ class _PromoCodeRow extends StatelessWidget {
             ),
           ),
           OutlinedButton(
-            onPressed: () => Get.to(() => const CheckoutScreen()),
+            onPressed: () => _goToCheckoutWithAuthCheck(),
             style: OutlinedButton.styleFrom(
               foregroundColor: Colors.black,
               side: const BorderSide(color: Colors.black54),

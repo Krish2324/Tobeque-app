@@ -95,41 +95,33 @@ class HomePageView extends StatelessWidget {
               foregroundColor: Colors.black,
               leadingWidth: 70,
               leading: Padding(
-                padding: const EdgeInsets.only(left: 14, top: 6, bottom: 6),
+                padding: const EdgeInsets.only(left: 12, top: 8, bottom: 8),
                 child: Center(
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(30),
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-                      child: Container(
-                        width: 42,
-                        height: 42,
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.35),
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.25),
-                            width: 1,
-                          ),
-                        ),
-                        child: Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            customBorder: const CircleBorder(),
-                            splashColor: Colors.white24,
-                            onTap: () {
-                              Get.to(
-                                () => const MenuScreen(),
-                                transition: Transition.leftToRight,
-                                duration: const Duration(milliseconds: 280),
-                              );
-                            },
-                            child: const Icon(
-                              Icons.menu_rounded,
-                              color: Colors.white,
-                              size: 22,
-                            ),
-                          ),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(6),
+                      splashColor: Colors.white24,
+                      onTap: () {
+                        Get.to(
+                          () => const MenuScreen(),
+                          transition: Transition.leftToRight,
+                          duration: const Duration(milliseconds: 280),
+                        );
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.all(4),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: const [
+                            _MenuLine(width: 20),
+                            SizedBox(height: 4),
+                            _MenuLine(width: 14),
+                            SizedBox(height: 4),
+                            _MenuLine(width: 20),
+                          ],
                         ),
                       ),
                     ),
@@ -312,6 +304,27 @@ SliverToBoxAdapter(
         ),
       );
     });
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   MINIMAL HAMBURGER MENU LINE
+   ═══════════════════════════════════════════════════════════════ */
+
+class _MenuLine extends StatelessWidget {
+  const _MenuLine({required this.width});
+  final double width;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: 2,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(1),
+      ),
+    );
   }
 }
 
