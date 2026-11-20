@@ -50,9 +50,8 @@ class FcmService {
       onTap: _handleNotificationTap,
     );
 
-    // 3. Request permission from the user
-    // REMOVED: We now request this on the onboarding screen only!
-    // await _requestPermissions();
+    // 3. Request permission from the user (required on iOS to get any token)
+    await _requestPermissions();
 
     // 4. Get and register the FCM token
     await _registerToken();
@@ -85,27 +84,40 @@ class FcmService {
   // ── Private: Permission Request ───────────────────────────────────────────
 
   static Future<void> _requestPermissions() async {
-    NotificationSettings settings = await _fcm.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
-      announcement: false,
-      carPlay: false,
-      criticalAlert: false,
-      provisional: false,
-    );
+    try {
+      NotificationSettings settings = await _fcm.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+        announcement: false,
+        carPlay: false,
+        criticalAlert: false,
+        provisional: false,
+      );
 
-    debugPrint('[FCM] Permission status: ${settings.authorizationStatus}');
+      debugPrint('[FCM] Permission status: ${settings.authorizationStatus}');
+    } catch (e) {
+      debugPrint('[FCM] Permission request error: $e');
+    }
   }
 
   // ── Private: Token Management ─────────────────────────────────────────────
 
   static Future<void> _registerToken() async {
     try {
-      // Get APNS token first on iOS (required before getToken works)
+      // ── iOS: APNS token must be obtained BEFORE getToken() will work ──────
+      // On iOS, APNS registration is asynchronous and can take several seconds.
+      // getAPNSToken() returns null until the system completes registration.
+      // We poll with retries to wait for it.
       if (Platform.isIOS) {
-        final apnsToken = await _fcm.getAPNSToken();
-        debugPrint('[FCM] APNS Token: $apnsToken');
+        final apnsToken = await _waitForApnsToken();
+        if (apnsToken == null) {
+          debugPrint('[FCM] APNS token not available — notification permission may be denied or device is a simulator');
+          return; // Cannot get FCM token without APNS token on iOS
+        }
+        debugPrint('[FCM] APNS Token obtained: ${apnsToken.substring(0, 10)}...');
+        // Give Firebase a moment to exchange the APNS token for an FCM token
+        await Future.delayed(const Duration(milliseconds: 500));
       }
 
       final String? token = await _fcm.getToken();
@@ -118,6 +130,26 @@ class FcmService {
     } catch (e) {
       debugPrint('[FCM] Error getting token: $e');
     }
+  }
+
+  /// Polls for the APNS token with retries.
+  /// On iOS, the APNS token can take a few seconds to become available.
+  static Future<String?> _waitForApnsToken({int maxRetries = 10, int delayMs = 1000}) async {
+    for (int i = 0; i < maxRetries; i++) {
+      try {
+        final apnsToken = await _fcm.getAPNSToken();
+        if (apnsToken != null && apnsToken.isNotEmpty) {
+          return apnsToken;
+        }
+      } catch (e) {
+        debugPrint('[FCM] APNS token attempt ${i + 1} error: $e');
+      }
+      if (i < maxRetries - 1) {
+        debugPrint('[FCM] APNS token not ready, retrying in ${delayMs}ms (attempt ${i + 1}/$maxRetries)...');
+        await Future.delayed(Duration(milliseconds: delayMs));
+      }
+    }
+    return null;
   }
 
   static Future<void> _saveTokenToBackend(String token) async {
@@ -150,8 +182,31 @@ class FcmService {
   // ── Public: Re-register token after login ─────────────────────────────────
 
   /// Call this after successful user login to ensure the token is registered.
+  /// On iOS, retries a few times with delay to handle the case where Firebase
+  /// is still initializing in the background.
   static Future<void> refreshTokenAfterLogin() async {
-    await _registerToken();
+    if (Platform.isIOS) {
+      // On iOS, Firebase may still be initializing. Retry up to 3 times.
+      for (int attempt = 1; attempt <= 3; attempt++) {
+        try {
+          await _registerToken();
+          // Check if we got a token — if so, we're done
+          final token = await _fcm.getToken();
+          if (token != null) {
+            debugPrint('[FCM] Token registered after login (attempt $attempt)');
+            return;
+          }
+        } catch (e) {
+          debugPrint('[FCM] refreshTokenAfterLogin attempt $attempt error: $e');
+        }
+        if (attempt < 3) {
+          debugPrint('[FCM] Retrying FCM token registration in 2s (attempt $attempt/3)...');
+          await Future.delayed(const Duration(seconds: 2));
+        }
+      }
+    } else {
+      await _registerToken();
+    }
   }
 
   /// Call this on logout to remove the token from backend.
@@ -268,3 +323,4 @@ class FcmService {
     }
   }
 }
+
